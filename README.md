@@ -1,7 +1,7 @@
 # 🚀 Jira-AI: AI-Powered Jira Issue Creation
 
 ## 📌 Overview
-Jira-AI is a Python-based automation tool that leverages OpenAI to create Jira issues (Epics, Stories, Tasks) with minimal user input. The script intelligently expands a few user-provided keywords into structured Agile stories, complete with acceptance criteria and tasks, following Jira best practices.
+Jira-AI is a Python-based automation tool that leverages OpenAI to create Jira issues (Epics, Stories, Tasks, acceptance criteria) with minimal user input. The script intelligently expands a few user-provided keywords into structured Agile stories, complete with acceptance criteria and tasks, following Jira best practices.
 
 ## 🔹 Features
 - **Epic Creation**: Users provide an Epic title and description.
