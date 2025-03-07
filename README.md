@@ -32,7 +32,8 @@ JIRA_USERNAME=your.email@company.com
 JIRA_API_TOKEN=your-jira-api-token
 OPENAI_API_KEY=your-openai-api-key
 ```
-> **Note:** The script will prompt for these if no .env is found
+> **Note:** The script will prompt for these if no .env is found.
+
 > **Note:** You must have Jira permissions to create issues.
 
 ## 🔹 Usage
