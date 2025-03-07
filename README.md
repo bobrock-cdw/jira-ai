@@ -87,11 +87,10 @@ As a user, I want to build this thing by starting with this.
 https://projectultron.atlassian.net/browse/MC-204?atlOrigin=eyJpIjoiZTkyNWQ0ZmUwMDA3NGEwYmE5YjQ1NzUyNTRjOTQ3NDkiLCJwIjoiaiJ9
 
 ## 📌 License
-This project is licensed under the MIT License.
+
 
 ## 📌 Contributing
 Feel free to submit issues or open a pull request to improve this tool!
 
 ---
 🚀 **Jira-AI**: Streamline Agile Workflows with AI! 🚀
-
