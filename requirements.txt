@@ -1,0 +1,6 @@
+jira
+google-auth
+google-cloud-discoveryengine
+openai
+python-dotenv
+
