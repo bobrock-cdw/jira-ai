@@ -1,96 +1,39 @@
 # 🚀 Jira-AI: AI-Powered Jira Issue Creation
 
 ## 📌 Overview
-Jira-AI is a Python-based automation tool that leverages OpenAI to create Jira issues (Epics, Stories, Tasks, Acceptance Criteria) with minimal user input. The script intelligently expands a few user-provided keywords into structured Agile stories, complete with acceptance criteria and tasks, following Jira best practices.
+Jira-AI is a Python-based automation tool that leverages OpenAI to create Jira issues effortlessly. It converts a few user-provided keywords into structured Agile issues—Epics, Stories, and Tasks—with comprehensive acceptance criteria and adaptive task breakdowns, all while following Jira best practices. With flexible workflows, you can choose to create issues with or without Epics, add tasks to new or existing Stories, or even generate standalone Tasks.
 
 ## 🔹 Features
-- **Epic Creation**: Users provide an Epic title and description.
-- **Story Generation**: Users input brief story topics, and AI converts them into complete user stories.
-- **Acceptance Criteria Automation**: AI generates 3+ acceptance criteria for each story.
-- **Task Breakdown**: AI creates implementation tasks per story.
-- **Jira Integration**: Issues are automatically created in Jira.
+- **Flexible Issue Creation**: Choose the workflow that fits your needs—Epics, Stories, or standalone Tasks.
+- **Epic Mode**: Create an Epic and automatically generate related Stories (with comprehensive acceptance criteria) and Tasks linked to that Epic.
+- **Story Mode**: Create a new Story with generated Tasks or add additional subtasks to an existing Story.
+- **Task Mode**: Generate and create standalone Tasks without any parent issue.
+- **Dynamic Acceptance Criteria**: AI generates a comprehensive set of acceptance criteria tailored to each user story.
+- **Adaptive Task Breakdown**: AI determines and creates as many tasks as needed for proper implementation.
+- **Jira Integration**: Issues are automatically created in Jira using your provided credentials.
 
 ## 🛠️ Requirements
-### ✅ **Software & Dependencies**
+### ✅ Software & Dependencies
 - **Python** 3.8+
 - **pip** package manager
 - **Jira Cloud Account** with issue creation permissions
 - **OpenAI API Key** (requires ChatGPT credits)
 - **Jira API Token**
 
-### ✅ **Python Packages**
+### ✅ Python Packages
 Install the required dependencies:
 ```sh
 pip install jira openai python-dotenv
 ```
-
-### ✅ **Authentication Setup**
+✅ **Authentication Setup**  
 Create a `.env` file in the project root to store authentication details:
+
 ```ini
 JIRA_SERVER=https://yourcompany.atlassian.net
 JIRA_USERNAME=your.email@company.com
 JIRA_API_TOKEN=your-jira-api-token
 OPENAI_API_KEY=your-openai-api-key
 ```
-> **Note:** The script will prompt for these if no .env is found.
+Note: The script will prompt for these if no .env is found.
 
-> **Note:** You must have Jira permissions to create issues.
-
-## 🔹 Usage
-Run the script:
-```sh
-python3 jira-ai.py
-```
-### 📌 Input Process
-1. **Enter Jira Server & Project Information** (or use defaults from `.env`)
-2. **Enter Epic Title & Description**
-3. **Enter Story Topics**
-   - Each line should contain a few words describing a user story.
-   - A blank line signals the end of story input.
-4. **AI Automatically Generates**:
-   - Structured user stories using best Agile practices.
-   - Acceptance criteria for each story.
-   - Relevant tasks for each story.
-5. **Jira Issues are Created Automatically**
-
-### 📌 Example Workflow
-#### **User Inputs**
-```
-Enter Epic Title: My Thing
-Enter Epic Description: I want to build the thing
-
-🔹 Enter Story Topics (one per line, blank to finish):
-➤ Story one for building my thing
-➤ Story two for building my thing
-➤ Story three for building my thing
-
-```
-#### **AI-Generated Output**
-**Epic: My Thing** ✅ Created in Jira
-
-**Story 1: Story one for building my thing** ✅
-```
-As a user, I want to build this thing by starting with this.
-```
-✅ **Acceptance Criteria:**
-- Users can access the thing.
-- Users receive an error message for incorrect login credentials when accessing the thing with bad creds
-- Users get locked out after 5 failed login attempts to access the thing
-
-✅ **Tasks:**
-- **Develop Login Page UI** – Implement frontend UI for login.
-- **Integrate Authentication Backend** – Secure login functionality.
-
-✔️ **Story & Tasks Created in Jira**
-
-### Example Jira Epic that was created using this script
-https://projectultron.atlassian.net/browse/MC-204?atlOrigin=eyJpIjoiZTkyNWQ0ZmUwMDA3NGEwYmE5YjQ1NzUyNTRjOTQ3NDkiLCJwIjoiaiJ9
-
-## 📌 License
-
-
-## 📌 Contributing
-Feel free to submit issues or open a pull request to improve this tool!
-
----
-🚀 **Jira-AI**: Streamline Agile Workflows with AI! 🚀
+Note: You must have Jira permissions to create issues.
