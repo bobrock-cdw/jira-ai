@@ -5,15 +5,15 @@ from jira import JIRA
 import openai
 
 # ---------------------- CONFIGURATION ----------------------
-JIRA_SERVER = input("Enter Jira Server URL (default: https://projectultron.atlassian.net): ").strip() or "https://projectultron.atlassian.net"
-JIRA_PROJECT_KEY = input("Enter Jira Project Key (default: MC): ").strip() or "MC"
+JIRA_SERVER = input("Jira Server URL (default: https://projectultron.atlassian.net): ") or "https://projectultron.atlassian.net"
+JIRA_PROJECT_KEY = input("Jira Project Key (default: MC): ") or "MC"
 
 JIRA_USERNAME = os.getenv("JIRA_USERNAME")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not (JIRA_USERNAME and JIRA_API_TOKEN and OPENAI_API_KEY):
-    print("\n❌ ERROR: Missing required environment variables.")
+    print("\n❌ Missing required environment variables.")
     sys.exit(1)
 
 openai.api_key = OPENAI_API_KEY
@@ -21,10 +21,9 @@ client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
 try:
     jira = JIRA(server=JIRA_SERVER, basic_auth=(JIRA_USERNAME, JIRA_API_TOKEN))
-    user = jira.myself()
-    print(f"\n✅ Authenticated as: {user['displayName']}")
+    print(f"\n✅ Authenticated as: {jira.myself()['displayName']}")
 except Exception as e:
-    print(f"\n❌ ERROR: Jira authentication failed: {e}")
+    print(f"\n❌ Jira authentication failed: {e}")
     sys.exit(1)
 
 # ---------------------- OPENAI FUNCTIONS ----------------------
@@ -39,118 +38,114 @@ def generate_json(prompt, retries=3):
                     temperature=0.7
                 )
                 ai_response = response.choices[0].message.content.strip()
-                try:
-                    return json.loads(ai_response)
-                except json.JSONDecodeError as e:
-                    print(f"\n⚠️ JSON decode error: {e}")
-                    print(f"🔍 Raw response: {ai_response}\nRetrying...({attempt+1}/{retries})")
+                return json.loads(ai_response)
             except Exception as e:
-                print(f"\n⚠️ OpenAI API error: {e}\nRetrying...({attempt+1}/{retries})")
-        print(f"⚠️ Model {model} failed, switching model.")
+                print(f"\n⚠️ Error: {e}\nRetrying...({attempt+1}/{retries})")
+        print(f"⚠️ Model {model} failed, switching...")
     print("\n❌ AI generation failed. Exiting.")
     sys.exit(1)
 
-def generate_story_and_tasks(story_title, story_description):
+def generate_story_and_tasks(title):
     prompt = f"""
-You are an expert Jira Product Owner assistant.
-
-Given these details, generate a professional Jira user story with acceptance criteria and tasks.
-
-Respond strictly with JSON in this format:
-{{
-  "title": "<Clear professional story title>",
-  "user_story": "As a <role>, I want <feature>, so that <benefit>.",
-  "acceptance_criteria": [
-    "Acceptance criterion 1",
-    "Acceptance criterion 2"
-  ],
-  "tasks": [
-    {{"title": "Task title", "description": "Detailed task description"}},
-    {{"title": "Task title", "description": "Detailed task description"}}
-  ]
-}}
-
-Details provided:
-- Title: "{story_title}"
-- Description: "{story_description}"
-"""
+    Generate Jira story JSON from this short description: "{title}"
+    Include "title", "user_story", "acceptance_criteria", and "tasks".
+    Respond only with valid JSON.
+    """
     return generate_json(prompt)
 
-# ---------------------- JIRA ISSUE CREATION ----------------------
-def create_epic(title, description):
-    epic = jira.create_issue(fields={
-        "project": {"key": JIRA_PROJECT_KEY},
-        "summary": title,
-        "description": description,
-        "issuetype": {"name": "Epic"}
-    })
-    print(f"\n✅ Created Epic: {epic.key}")
-    return epic.key
+def generate_task_and_subtasks(title):
+    prompt = f"""
+    Generate Jira task JSON with subtasks from: "{title}"
+    Include "title", "description", and "subtasks".
+    Respond only with valid JSON.
+    """
+    return generate_json(prompt)
 
-def create_story(parent_key, story_data):
+# ---------------------- JIRA CREATION FUNCTIONS ----------------------
+def create_issue(issue_type, summary, description, parent=None):
     fields = {
         "project": {"key": JIRA_PROJECT_KEY},
-        "summary": story_data["title"],
-        "description": f"{story_data['user_story']}\n\nAcceptance Criteria:\n" +
-                       "\n".join(f"- {ac}" for ac in story_data["acceptance_criteria"]),
-        "issuetype": {"name": "Story"}
+        "summary": summary,
+        "description": description,
+        "issuetype": {"name": issue_type}
     }
-    if parent_key:
-        fields["parent"] = {"key": parent_key}
-    story = jira.create_issue(fields=fields)
-    print(f"\n✅ Created Story: {story.key}")
-    return story.key
+    if parent:
+        fields["parent"] = {"key": parent}
+    issue = jira.create_issue(fields=fields)
+    print(f"✅ Created {issue_type}: {issue.key}")
+    return issue.key
 
-def create_subtasks(parent_story_key, tasks):
-    for task in tasks:
-        subtask = jira.create_issue(fields={
-            "project": {"key": JIRA_PROJECT_KEY},
-            "summary": task["title"],
-            "description": task["description"],
-            "issuetype": {"name": "Sub-task"},
-            "parent": {"key": parent_story_key}
-        })
-        print(f"✅ Created Subtask: {subtask.key}")
-
-# ---------------------- CONFIRMATION STEP ----------------------
-def confirm_and_create(issue_type, data, parent_key=None):
-    print(f"\n📌 Proposed {issue_type}:")
-    print(json.dumps(data, indent=2))
-
-    confirm = input("\n🔔 Create these issues in Jira? [Y/N]: ").lower()
-    if confirm != 'y':
-        print("🚫 Operation cancelled.")
-        sys.exit(0)
-
-    if issue_type == "Epic":
-        return create_epic(data['title'], data['description'])
-    elif issue_type == "Story":
-        story_key = create_story(parent_key, data)
-        create_subtasks(story_key, data['tasks'])
+def create_subtasks(parent_key, subtasks):
+    for st in subtasks:
+        create_issue("Sub-task", st["title"], st["description"], parent_key)
 
 # ---------------------- MAIN EXECUTION ----------------------
 def main():
     while True:
-        print("\nOptions:\n1. Create Epic\n2. Create Story\n3. Exit")
-        choice = input("Choose (1-3): ").strip()
+        choice = input("\nOptions:\n1. Epic\n2. Story\n3. Task/Subtask\n4. Exit\nChoose (1-4): ")
 
         if choice == '1':
-            title = input("Epic Title: ").strip()
-            desc = input("Epic Description: ").strip()
-            confirm_and_create("Epic", {"title": title, "description": desc})
+            title = input("Epic Title: ")
+            desc = input("Epic Description: ")
+            create_issue("Epic", title, desc)
 
         elif choice == '2':
-            epic_key = input("Epic Key (optional): ").strip()
-            title = input("Story Title: ").strip()
-            desc = input("Story Description: ").strip()
-            story_data = generate_story_and_tasks(title, desc)
-            confirm_and_create("Story", story_data, epic_key or None)
+            epic_key = input("Epic Key (optional): ") or None
+            method = input("Content source [manual/ai]: ").lower()
+            if method == 'manual':
+                title = input("Story Title: ")
+                user_story = input("User Story: ")
+                ac = input("Acceptance Criteria (comma-separated): ").split(",")
+                tasks_raw = input("Tasks (title:description; separate tasks by semicolon): ")
+                tasks = [{"title": t.split(":")[0].strip(), "description": t.split(":")[1].strip()} for t in tasks_raw.split(";")]
+
+                story_data = {
+                    "title": title,
+                    "user_story": user_story,
+                    "acceptance_criteria": [a.strip() for a in ac],
+                    "tasks": tasks
+                }
+            else:
+                desc = input("Give me a few words to describe your story: ")
+                story_data = generate_story_and_tasks(desc)
+
+            story_key = create_issue("Story", story_data["title"],
+                                     story_data["user_story"] + "\nAcceptance Criteria:\n" +
+                                     "\n".join(f"- {c}" for c in story_data["acceptance_criteria"]),
+                                     epic_key)
+            create_subtasks(story_key, story_data["tasks"])
 
         elif choice == '3':
+            task_type = input("Task or Sub-task? [task/subtask]: ").lower()
+            parent_key = input("Parent Key (Story for task, Task for subtask): ")
+            method = input("Content source [manual/ai]: ").lower()
+
+            if method == 'manual':
+                title = input("Title: ")
+                desc = input("Description: ")
+
+                if task_type == 'task':
+                    task_key = create_issue("Task", title, desc, parent_key)
+                    add_subs = input("Add subtasks? [y/n]: ").lower()
+                    if add_subs == 'y':
+                        subs_raw = input("Subtasks (title:description; separate by semicolon): ")
+                        subtasks = [{"title": s.split(":")[0].strip(), "description": s.split(":")[1].strip()} for s in subs_raw.split(";")]
+                        create_subtasks(task_key, subtasks)
+                else:
+                    create_issue("Sub-task", title, desc, parent_key)
+
+            else:
+                desc = input("Give me a few words to describe your task: ")
+                task_data = generate_task_and_subtasks(desc)
+
+                task_key = create_issue("Task", task_data["title"], task_data["description"], parent_key)
+                create_subtasks(task_key, task_data["subtasks"])
+
+        elif choice == '4':
             print("👋 Exiting.")
             break
         else:
-            print("❌ Invalid choice, try again.")
+            print("❌ Invalid choice.")
 
 if __name__ == "__main__":
     main()
