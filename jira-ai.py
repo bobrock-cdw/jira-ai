@@ -97,7 +97,7 @@ def generate_ai_content(prompt_type, brief):
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
+            model='gemini-2.5-flash', 
             contents=prompts[prompt_type],
             config=types.GenerateContentConfig(response_mime_type='application/json', temperature=0.2)
         )

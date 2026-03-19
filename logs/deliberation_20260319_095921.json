@@ -1,0 +1,62 @@
+{
+    "title": "Google Chat Adoption Reporting API",
+    "user_story": "As a Google Workspace administrator, I need a comprehensive reporting API that provides insights into Google Chat adoption across various conversation types and space lifecycles, so that I can understand how users engage with Chat, identify trends in conversation patterns, and make informed decisions to optimize collaboration and adoption strategies within my organization.",
+    "acceptance_criteria": [
+        "A new, single, consistent API endpoint is available for Chat adoption reporting.",
+        "The API successfully returns metrics for GROUP_CHATS, ONE_ONE, ONE_MULTIPLE, SPACES_CREATED, and ACTIVE_SPACES.",
+        "Conversation types are accurately classified into GROUP_CHATS, ONE_ONE, ONE_MULTIPLE, and named SPACES.",
+        "The API supports date filtering to retrieve data for specified periods.",
+        "The API supports pagination for efficient data retrieval of large datasets.",
+        "The API supports customer scoping, allowing data retrieval for specific customer organizations.",
+        "All reported metrics are derived from the extended Workspace data pipeline, integrating Reports API, Chat/Spaces metadata, and BigQuery.",
+        "The underlying data is normalized and stored in a consolidated warehouse model.",
+        "The reporting UI can successfully integrate with and consume data from the new API endpoint.",
+        "All metric definitions (e.g., ACTIVE_SPACES, SPACES_CREATED) align with established admin expectations and contractually defined standards."
+    ],
+    "tasks": [
+        {
+            "title": "Define Conversation Classification Logic and Metrics",
+            "description": "Collaborate with PM and stakeholders to precisely define the classification logic for GROUP_CHATS, ONE_ONE, ONE_MULTIPLE, and named SPACES. Establish clear, unambiguous definitions for SPACES_CREATED and ACTIVE_SPACES, ensuring alignment with existing Chat analytics and admin expectations. Document these definitions and classification rules."
+        },
+        {
+            "title": "Design API Contract and Schema",
+            "description": "Architects and Devs will design the RESTful API endpoint contract, including request parameters (date range, customer ID, pagination tokens) and response schema. Ensure the schema accommodates all required metrics and allows for future extensibility. Define error handling and authentication mechanisms."
+        },
+        {
+            "title": "Design Consolidated Data Warehouse Model",
+            "description": "Design the BigQuery schema for the consolidated warehouse model. This model will normalize and store chat events and space metadata, incorporating the defined conversation classifications and metrics. Focus on query performance and data integrity for the reporting API."
+        },
+        {
+            "title": "Extend Data Ingestion Pipeline",
+            "description": "Develop or modify existing ETL processes to ingest raw data from Google Workspace Reports API, Chat/Spaces metadata, and other relevant sources. Ensure comprehensive capture of all necessary events and metadata required for classification and metric calculation."
+        },
+        {
+            "title": "Implement ETL for Data Normalization and Classification",
+            "description": "Develop ETL jobs to process ingested raw data. This includes normalizing disparate data formats, applying the defined conversation classification logic, and calculating the SPACES_CREATED and ACTIVE_SPACES metrics. Populate the consolidated BigQuery warehouse model with this processed data."
+        },
+        {
+            "title": "Develop Reporting API Endpoint",
+            "description": "Implement the new API endpoint based on the designed contract. This involves setting up the API gateway, routing, and core logic to query the BigQuery warehouse model. Focus on efficient data retrieval and response generation."
+        },
+        {
+            "title": "Implement API Filtering, Pagination, and Scoping",
+            "description": "Integrate date filtering, pagination (e.g., using cursor-based or offset-based methods), and customer scoping capabilities into the API endpoint. Ensure these parameters are correctly passed to BigQuery queries and results are returned as per the API contract."
+        },
+        {
+            "title": "Develop Comprehensive Test Plan and Cases",
+            "description": "QA team to develop a detailed test plan covering functional, performance, security, and data accuracy testing. Create specific test cases for each metric, classification, API parameter (date, pagination, scope), and edge cases."
+        },
+        {
+            "title": "Perform Data Accuracy and Consistency Testing",
+            "description": "Execute tests to verify that the data in the consolidated warehouse model and the data returned by the API are accurate, consistent, and align with the defined metrics and classification logic. Compare against existing analytics where possible."
+        },
+        {
+            "title": "Perform API Functional and Performance Testing",
+            "description": "Conduct thorough functional testing of the API endpoint, including all filtering, pagination, and scoping parameters. Perform load and performance testing to ensure the API can handle expected query volumes and response times under various conditions."
+        },
+        {
+            "title": "Document API and Data Model",
+            "description": "Create comprehensive internal and external documentation for the new API endpoint, including usage guides, request/response examples, error codes, and authentication details. Document the consolidated data warehouse model and ETL processes for future maintenance and understanding."
+        }
+    ]
+}
