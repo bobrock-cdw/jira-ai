@@ -23,11 +23,15 @@ from core.gemini import (
     test_gemini_connection,
 )
 from core.jira_client import (
-    build_issue_fields,
-    create_issue as core_create_issue,
     create_jira_client,
     get_current_user_display_name,
     resolve_assignee_account_id,
+)
+from core.service import (
+    JiraIssueContext,
+    create_issue_from_context,
+    create_story_with_tasks,
+    create_task_with_subtasks,
 )
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -262,20 +266,31 @@ def generate_ai_content(prompt_type, brief):
         return None
 
 
-def create_issue(issue_type, summary, description, parent=None):
-    fields = build_issue_fields(
+def get_issue_context():
+    return JiraIssueContext(
         project_key=JIRA_PROJECT_KEY,
-        issue_type=issue_type,
-        summary=summary,
-        description=description,
         component_name=JIRA_COMPONENT_NAME,
         assignee_account_id=ASSIGNEE_ACCOUNT_ID,
-        parent=parent,
     )
+
+
+def print_created_issues(created_issues):
+    for issue in created_issues:
+        print(f"✅ Created {issue.issue_type}: {issue.key}")
+
+
+def create_issue(issue_type, summary, description, parent=None):
     try:
-        issue_key = core_create_issue(jira, fields)
-        print(f"✅ Created {issue_type}: {issue_key}")
-        return issue_key
+        created = create_issue_from_context(
+            jira_client=jira,
+            context=get_issue_context(),
+            issue_type=issue_type,
+            summary=summary,
+            description=description,
+            parent=parent,
+        )
+        print_created_issues([created])
+        return created.key
     except Exception as e:
         print(f"❌ Creation Failed: {e}")
         return None
@@ -295,66 +310,90 @@ def test_gemini():
         sys.exit(1)
 
 
+def handle_epic():
+    title = safe_input("Epic Title: ")
+    desc = get_multiline_input("Epic Description")
+    create_issue("Epic", title, desc)
+
+
+def review_generated_content(prompt_type, brief):
+    data = generate_ai_content(prompt_type, brief)
+    if not data:
+        return None, None
+    log_deliberation(data)
+    print("\nPROPOSED CONTENT:\n", json.dumps(data, indent=2))
+    action = safe_input("\n[y] Create, [r] Retry, [n] Cancel: ").lower().strip()
+    return data, action
+
+
+def handle_story():
+    epic = safe_input("Epic Key (optional): ").strip() or None
+    brief = get_multiline_input("Describe the Story requirement")
+    if not brief:
+        print("⚠️ No brief provided; skipping.")
+        return
+
+    while True:
+        data, action = review_generated_content("story", brief)
+        if not data:
+            return
+        if action == "y":
+            try:
+                created = create_story_with_tasks(
+                    jira_client=jira,
+                    context=get_issue_context(),
+                    story_data=data,
+                    epic_key=epic,
+                )
+                print_created_issues(created)
+            except Exception as e:
+                print(f"❌ Creation Failed: {e}")
+            return
+        if action != "r":
+            return
+
+
+def handle_task_or_subtask():
+    requested_type = safe_input("Create Task or Sub-task? [task/subtask]: ").lower().strip()
+    parent = safe_input("Parent Key (optional for Task): ").strip() or None
+    brief = get_multiline_input(f"Describe the {requested_type}")
+    if not brief:
+        print("⚠️ No brief provided; skipping.")
+        return
+
+    issue_type = "Task" if requested_type == "task" else "Sub-task"
+    while True:
+        data, action = review_generated_content("task", brief)
+        if not data:
+            return
+        if action == "y":
+            try:
+                created = create_task_with_subtasks(
+                    jira_client=jira,
+                    context=get_issue_context(),
+                    task_data=data,
+                    issue_type=issue_type,
+                    parent=parent,
+                )
+                print_created_issues(created)
+            except Exception as e:
+                print(f"❌ Creation Failed: {e}")
+            return
+        if action != "r":
+            return
+
+
 def main():
     while True:
         print("\n1. Epic | 2. Story | 3. Task/SubTask | 4. Exit")
         choice = safe_input("Choice: ")
 
         if choice == "1":
-            title = safe_input("Epic Title: ")
-            desc = get_multiline_input("Epic Description")
-            create_issue("Epic", title, desc)
-
+            handle_epic()
         elif choice == "2":
-            epic = safe_input("Epic Key (optional): ").strip() or None
-            brief = get_multiline_input("Describe the Story requirement")
-            if not brief:
-                print("⚠️ No brief provided; skipping.")
-                continue
-            while True:
-                data = generate_ai_content("story", brief)
-                if not data:
-                    break
-                log_deliberation(data)
-                print("\nPROPOSED CONTENT:\n", json.dumps(data, indent=2))
-                action = safe_input("\n[y] Create, [r] Retry, [n] Cancel: ").lower().strip()
-                if action == "y":
-                    desc = f"{data['user_story']}\n\nAcceptance Criteria:\n- " + "\n- ".join(data["acceptance_criteria"])
-                    key = create_issue("Story", data["title"], desc, epic)
-                    if key:
-                        for t in data["tasks"]:
-                            create_issue("Sub-task", t["title"], t["description"], key)
-                    break
-                if action != "r":
-                    break
-
+            handle_story()
         elif choice == "3":
-            i_type = safe_input("Create Task or Sub-task? [task/subtask]: ").lower().strip()
-            parent = safe_input("Parent Key (optional for Task): ").strip() or None
-            brief = get_multiline_input(f"Describe the {i_type}")
-            if not brief:
-                print("⚠️ No brief provided; skipping.")
-                continue
-            while True:
-                data = generate_ai_content("task", brief)
-                if not data:
-                    break
-                log_deliberation(data)
-                print("\nPROPOSED CONTENT:\n", json.dumps(data, indent=2))
-                action = safe_input("\n[y] Create, [r] Retry, [n] Cancel: ").lower().strip()
-                if action == "y":
-                    key = create_issue(
-                        "Task" if i_type == "task" else "Sub-task",
-                        data["title"],
-                        data["description"],
-                        parent,
-                    )
-                    if key and i_type == "task" and "subtasks" in data:
-                        for s in data["subtasks"]:
-                            create_issue("Sub-task", s["title"], s["description"], key)
-                    break
-                if action != "r":
-                    break
+            handle_task_or_subtask()
         elif choice == "4":
             break
 
