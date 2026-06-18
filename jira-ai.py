@@ -9,31 +9,27 @@ from jira import JIRA
 from google import genai
 from google.genai import types
 
+from core.config import (
+    DEFAULT_GCP_LOCATION,
+    DEFAULT_GCP_PROJECT_ID,
+    DEFAULT_JIRA_ASSIGNEE,
+    DEFAULT_JIRA_COMPONENT,
+    DEFAULT_JIRA_PROJECT,
+    DEFAULT_JIRA_SERVER,
+    GEMINI_MODEL,
+    LARGE_PASTE_WARNING_CHARS,
+    MAX_BRIEF_CHARS,
+    SessionConfig,
+    build_gemini_http_options,
+    get_jira_credentials,
+)
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(line_buffering=True)
 
-# ====================== HARDCODED CONFIGURATION ======================
-DEFAULT_GCP_PROJECT_ID = "cdw-gemini-cli-sbx"
-DEFAULT_GCP_LOCATION = "us-central1"
-DEFAULT_JIRA_SERVER = "https://projectultron.atlassian.net"
-DEFAULT_JIRA_PROJECT = "MC"
-DEFAULT_JIRA_COMPONENT = "Cloud"
-DEFAULT_JIRA_ASSIGNEE = "Bob Rock"
-LARGE_PASTE_WARNING_CHARS = 4096
-MAX_BRIEF_CHARS = 500_000
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_REQUEST_TIMEOUT_MS = 120_000
-GEMINI_HTTP_OPTIONS = types.HttpOptions(
-    timeout=GEMINI_REQUEST_TIMEOUT_MS,
-    # Fail fast on quota/rate limits instead of retrying silently for minutes.
-    retry_options=types.HttpRetryOptions(
-        attempts=2,
-        http_status_codes=[500, 502, 503, 504],
-    ),
-)
-# ======================================================================
+GEMINI_HTTP_OPTIONS = build_gemini_http_options()
 
 # Session globals set during startup()
 JIRA_SERVER = None
@@ -95,7 +91,15 @@ def get_initial_config():
     print("\n--- Session Context ---")
     context = safe_input("Enter Project/Tech Context: ").strip()
 
-    return server, jira_project, component, assignee, gcp_project, location, context
+    return SessionConfig(
+        jira_server=server,
+        jira_project_key=jira_project,
+        jira_component_name=component,
+        jira_assignee_username=assignee,
+        gcp_project_id=gcp_project,
+        gcp_location=location,
+        project_context=context,
+    )
 
 
 def startup():
@@ -103,14 +107,17 @@ def startup():
     global GCP_PROJECT_ID, GCP_LOCATION, PROJECT_CONTEXT
     global client, jira, ASSIGNEE_ACCOUNT_ID
 
-    (
-        JIRA_SERVER, JIRA_PROJECT_KEY, JIRA_COMPONENT_NAME, JIRA_ASSIGNEE_USERNAME,
-        GCP_PROJECT_ID, GCP_LOCATION, PROJECT_CONTEXT,
-    ) = get_initial_config()
+    config = get_initial_config()
+    JIRA_SERVER = config.jira_server
+    JIRA_PROJECT_KEY = config.jira_project_key
+    JIRA_COMPONENT_NAME = config.jira_component_name
+    JIRA_ASSIGNEE_USERNAME = config.jira_assignee_username
+    GCP_PROJECT_ID = config.gcp_project_id
+    GCP_LOCATION = config.gcp_location
+    PROJECT_CONTEXT = config.project_context
 
-    jira_user = os.getenv("JIRA_USERNAME")
-    jira_token = os.getenv("JIRA_API_TOKEN")
-    if not (jira_user and jira_token):
+    jira_credentials = get_jira_credentials()
+    if not jira_credentials:
         print("❌ Error: JIRA_USERNAME or JIRA_API_TOKEN not found.")
         sys.exit(1)
 
@@ -129,7 +136,10 @@ def startup():
 
     status("Connecting to Jira...")
     try:
-        jira = JIRA(server=JIRA_SERVER, basic_auth=(jira_user, jira_token))
+        jira = JIRA(
+            server=JIRA_SERVER,
+            basic_auth=(jira_credentials.username, jira_credentials.token),
+        )
         print(f"✅ Authenticated to Jira: {jira.myself()['displayName']}")
         users = jira.search_users(query=JIRA_ASSIGNEE_USERNAME, maxResults=1)
         ASSIGNEE_ACCOUNT_ID = users[0].accountId if users else None
