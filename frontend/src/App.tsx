@@ -241,6 +241,21 @@ function App() {
         <p>Generate, preview, and create structured Jira work items.</p>
       </header>
 
+      <section className="card intro-card">
+        <h2>How It Works</h2>
+        <p>
+          Jira-AI turns plain-language requirements into reviewed Jira work items.
+          You can create an Epic only, generate an Epic plan with Stories and child Tasks,
+          or generate individual Stories and Tasks.
+        </p>
+        <ol>
+          <li>Confirm the Jira settings and resolve the assignee.</li>
+          <li>Choose a workflow and enter the requirement or Epic description.</li>
+          <li>Generate and edit the proposed work items in the review section.</li>
+          <li>Preview the Jira payload, then explicitly create the approved issues.</li>
+        </ol>
+      </section>
+
       <section className="grid">
         <div className="card">
           <h2>Settings</h2>
