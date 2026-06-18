@@ -131,6 +131,26 @@ make check
 
 Core tests use only the standard library test runner. API tests require the optional FastAPI dependencies from `requirements-api.txt`; they mock Jira creation helpers and do not create live Jira issues.
 
+## Jira Story Evidence Utility
+
+To add an evidence comment to every Sub-task under a Story, run:
+
+```sh
+python3 scripts/update_story_subtasks.py
+```
+
+The script prompts for the Story key, extracts acceptance criteria from the Story description when possible, then prompts for evidence separately for each Sub-task. Leave a Sub-task evidence prompt blank and type `DONE` to skip that Sub-task. It runs as a dry run by default. To actually add the comments in Jira, use:
+
+```sh
+python3 scripts/update_story_subtasks.py --story MC-123 --apply
+```
+
+You can also use the dry-run shortcut:
+
+```sh
+make update-story-subtasks
+```
+
 ## Input Options
 
 When the script asks for a brief or description, it offers three input methods:

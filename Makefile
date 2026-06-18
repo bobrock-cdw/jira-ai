@@ -1,4 +1,4 @@
-.PHONY: install install-api install-frontend test check test-gemini run-cli run-api run-frontend build-frontend
+.PHONY: install install-api install-frontend test check test-gemini run-cli run-api run-frontend build-frontend update-story-subtasks
 
 install:
 	python3 -m pip install -r requirements.txt
@@ -31,3 +31,6 @@ run-frontend:
 
 build-frontend:
 	cd frontend && npm run build
+
+update-story-subtasks:
+	python3 scripts/update_story_subtasks.py
