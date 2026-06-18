@@ -19,6 +19,7 @@ import {
 } from "./api";
 import type {
   CreateIssuesResponse,
+  CreatedIssue,
   EpicIssue,
   EpicPlanResult,
   GeneratedTask,
@@ -371,7 +372,7 @@ function App() {
 
       {message && <pre className="message">{message}</pre>}
       {preview && <JsonPanel title="Preview Payloads" value={preview} />}
-      {created && <JsonPanel title="Created Issues" value={created} />}
+      {created && <CreatedIssuesSummary created={created.created} />}
     </main>
   );
 }
@@ -572,6 +573,39 @@ function JsonPanel({ title, value }: { title: string; value: unknown }) {
     <section className="card">
       <h2>{title}</h2>
       <pre>{JSON.stringify(value, null, 2)}</pre>
+    </section>
+  );
+}
+
+function CreatedIssuesSummary({ created }: { created: CreatedIssue[] }) {
+  const grouped = created.reduce<Record<string, CreatedIssue[]>>((groups, issue) => {
+    return {
+      ...groups,
+      [issue.issue_type]: [...(groups[issue.issue_type] || []), issue],
+    };
+  }, {});
+
+  const issueTypeOrder = ["Epic", "Story", "Task", "Sub-task"];
+  const orderedTypes = issueTypeOrder.filter((issueType) => grouped[issueType]?.length);
+
+  return (
+    <section className="card success-card">
+      <h2>Created Issues Summary</h2>
+      <p>Jira issue creation completed successfully.</p>
+      <div className="created-summary">
+        {orderedTypes.map((issueType) => (
+          <section key={issueType}>
+            <h3>{issueType}s</h3>
+            <ul>
+              {grouped[issueType].map((issue) => (
+                <li key={issue.key}>
+                  <strong>{issue.key}</strong> {issue.issue_type}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
     </section>
   );
 }
