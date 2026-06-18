@@ -20,8 +20,11 @@ import type {
   TaskGenerationResult,
 } from "./types";
 
-const DEFAULT_GCP_PROJECT = "cdw-gemini-cli-sbx";
-const DEFAULT_GCP_LOCATION = "us-central1";
+const DEFAULT_GCP_PROJECT = import.meta.env.VITE_GCP_PROJECT_ID || "";
+const DEFAULT_GCP_LOCATION = import.meta.env.VITE_GCP_LOCATION || "us-central1";
+const DEFAULT_JIRA_SERVER = import.meta.env.VITE_JIRA_SERVER || "";
+const DEFAULT_JIRA_PROJECT_KEY = import.meta.env.VITE_JIRA_PROJECT_KEY || "";
+const DEFAULT_JIRA_COMPONENT = import.meta.env.VITE_JIRA_COMPONENT || "";
 
 type Workflow = "story" | "task";
 
@@ -29,9 +32,9 @@ function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [gcpProjectId, setGcpProjectId] = useState(DEFAULT_GCP_PROJECT);
   const [gcpLocation, setGcpLocation] = useState(DEFAULT_GCP_LOCATION);
-  const [jiraServer, setJiraServer] = useState("https://projectultron.atlassian.net");
-  const [projectKey, setProjectKey] = useState("MC");
-  const [componentName, setComponentName] = useState("Cloud");
+  const [jiraServer, setJiraServer] = useState(DEFAULT_JIRA_SERVER);
+  const [projectKey, setProjectKey] = useState(DEFAULT_JIRA_PROJECT_KEY);
+  const [componentName, setComponentName] = useState(DEFAULT_JIRA_COMPONENT);
   const [assigneeAccountId, setAssigneeAccountId] = useState("");
   const [projectContext, setProjectContext] = useState("");
   const [workflow, setWorkflow] = useState<Workflow>("story");

@@ -253,10 +253,15 @@ npm install
 npm run dev
 ```
 
-The frontend defaults to calling `http://localhost:8000`. To point it at a different FastAPI server, copy `frontend/.env.example` to `frontend/.env` and set:
+The frontend defaults to calling `http://localhost:8000`. To point it at a different FastAPI server or prefill local form defaults, copy `frontend/.env.example` to `frontend/.env` and set values such as:
 
 ```sh
 VITE_API_BASE_URL=http://localhost:8000
+VITE_GCP_PROJECT_ID=your-gcp-project-id
+VITE_GCP_LOCATION=us-central1
+VITE_JIRA_SERVER=https://yourcompany.atlassian.net
+VITE_JIRA_PROJECT_KEY=MC
+VITE_JIRA_COMPONENT=Cloud
 ```
 
 Or use the Makefile shortcuts from the repo root:
