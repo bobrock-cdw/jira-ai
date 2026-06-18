@@ -186,6 +186,10 @@ Initial endpoints:
 
 The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. The create endpoints use `JIRA_USERNAME` and `JIRA_API_TOKEN` from the server environment and create real Jira issues, so use the preview endpoints first when testing UI flows.
 
+## Future React Frontend
+
+A React + Vite frontend plan is documented in `docs/react-frontend-plan.md`. Node.js is required before scaffolding and building the frontend.
+
 ## Notes and Limitations
 
 - Epics are manual only; there is no AI-generated Epic-to-Story breakdown yet.
