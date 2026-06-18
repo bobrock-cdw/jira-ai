@@ -157,6 +157,31 @@ For Tasks, the CLI:
 4. Logs and displays the generated JSON.
 5. Creates the Task/Sub-task and any generated Sub-tasks after approval.
 
+## Optional FastAPI Backend
+
+The repo includes a minimal FastAPI backend skeleton in `api.py`. It reuses the same `core/` Gemini logic as the CLI and is intended as the starting point for a future React UI.
+
+Install optional API dependencies:
+
+```sh
+pip install -r requirements-api.txt
+```
+
+Run the API:
+
+```sh
+uvicorn api:app --reload
+```
+
+Initial endpoints:
+
+- `GET /health`
+- `POST /test-gemini`
+- `POST /generate/story`
+- `POST /generate/task`
+
+The API skeleton currently supports Gemini connectivity checks and AI generation only. Jira issue creation endpoints should be added after the backend auth/config model is finalized.
+
 ## Notes and Limitations
 
 - Epics are manual only; there is no AI-generated Epic-to-Story breakdown yet.
