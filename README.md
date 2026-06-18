@@ -181,8 +181,10 @@ Initial endpoints:
 - `POST /generate/task`
 - `POST /preview/story`
 - `POST /preview/task`
+- `POST /create/story`
+- `POST /create/task`
 
-The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. Jira issue creation endpoints should be added after the backend auth/config model is finalized.
+The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. The create endpoints use `JIRA_USERNAME` and `JIRA_API_TOKEN` from the server environment and create real Jira issues, so use the preview endpoints first when testing UI flows.
 
 ## Notes and Limitations
 

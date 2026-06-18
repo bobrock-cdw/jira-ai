@@ -3,15 +3,19 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from core.config import DEFAULT_GCP_LOCATION, DEFAULT_GCP_PROJECT_ID
+from core.config import DEFAULT_GCP_LOCATION, DEFAULT_GCP_PROJECT_ID, DEFAULT_JIRA_SERVER, get_jira_credentials
 from core.gemini import (
     create_gemini_client,
     generate_ai_content,
     test_gemini_connection,
 )
 from core.models import StoryGenerationResult, TaskGenerationResult
+from core.jira_client import create_jira_client
 from core.service import (
+    CreatedIssue,
     JiraIssueContext,
+    create_story_with_tasks,
+    create_task_with_subtasks,
     preview_story_issue_fields,
     preview_task_issue_fields,
 )
@@ -50,6 +54,10 @@ class JiraIssueSettings(BaseModel):
     assignee_account_id: str | None = None
 
 
+class JiraCreateSettings(JiraIssueSettings):
+    jira_server: str = DEFAULT_JIRA_SERVER
+
+
 class StoryPreviewRequest(BaseModel):
     jira: JiraIssueSettings
     story: StoryGenerationResult
@@ -65,6 +73,28 @@ class TaskPreviewRequest(BaseModel):
 
 class IssueFieldsPreviewResponse(BaseModel):
     fields: list[dict]
+
+
+class StoryCreateRequest(BaseModel):
+    jira: JiraCreateSettings
+    story: StoryGenerationResult
+    epic_key: str | None = None
+
+
+class TaskCreateRequest(BaseModel):
+    jira: JiraCreateSettings
+    task: TaskGenerationResult
+    issue_type: Literal["Task", "Sub-task"] = "Task"
+    parent_key: str | None = None
+
+
+class CreatedIssueResponse(BaseModel):
+    issue_type: str
+    key: str
+
+
+class CreateIssuesResponse(BaseModel):
+    created: list[CreatedIssueResponse]
 
 
 @app.get("/health")
@@ -123,6 +153,33 @@ def generate_task(request: GenerateRequest) -> GenerateResponse:
     return generate_content("task", request)
 
 
+def build_issue_context(settings: JiraIssueSettings) -> JiraIssueContext:
+    return JiraIssueContext(
+        project_key=settings.project_key,
+        component_name=settings.component_name,
+        assignee_account_id=settings.assignee_account_id,
+    )
+
+
+def get_authenticated_jira_client(settings: JiraCreateSettings):
+    credentials = get_jira_credentials()
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="JIRA_USERNAME or JIRA_API_TOKEN not found.",
+        )
+    return create_jira_client(settings.jira_server, credentials)
+
+
+def to_create_response(created: list[CreatedIssue]) -> CreateIssuesResponse:
+    return CreateIssuesResponse(
+        created=[
+            CreatedIssueResponse(issue_type=issue.issue_type, key=issue.key)
+            for issue in created
+        ]
+    )
+
+
 @app.post("/preview/story")
 def preview_story(request: StoryPreviewRequest) -> IssueFieldsPreviewResponse:
     context = JiraIssueContext(
@@ -152,3 +209,50 @@ def preview_task(request: TaskPreviewRequest) -> IssueFieldsPreviewResponse:
         parent=request.parent_key,
     )
     return IssueFieldsPreviewResponse(fields=fields)
+
+
+@app.post(
+    "/create/story",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira Story creation failed"},
+    },
+)
+def create_story(request: StoryCreateRequest) -> CreateIssuesResponse:
+    try:
+        jira_client = get_authenticated_jira_client(request.jira)
+        created = create_story_with_tasks(
+            jira_client=jira_client,
+            context=build_issue_context(request.jira),
+            story_data=request.story.model_dump(),
+            epic_key=request.epic_key,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return to_create_response(created)
+
+
+@app.post(
+    "/create/task",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira Task creation failed"},
+    },
+)
+def create_task(request: TaskCreateRequest) -> CreateIssuesResponse:
+    try:
+        jira_client = get_authenticated_jira_client(request.jira)
+        created = create_task_with_subtasks(
+            jira_client=jira_client,
+            context=build_issue_context(request.jira),
+            task_data=request.task.model_dump(),
+            issue_type=request.issue_type,
+            parent=request.parent_key,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return to_create_response(created)
