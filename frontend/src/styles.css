@@ -137,12 +137,35 @@ pre {
   margin: 0;
 }
 
-.child-item {
+.review-box {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 14px;
   margin-top: 0.75rem;
   padding: 1rem;
+}
+
+.review-box h3 {
+  margin: 0 0 0.75rem;
+}
+
+.epic-box {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.story-box {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.task-box {
+  background: white;
+  border-color: #e5e7eb;
+}
+
+.task-box.nested {
+  margin-left: 1rem;
 }
 
 .empty-state {

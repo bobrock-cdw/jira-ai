@@ -426,14 +426,17 @@ function EpicPlanEditor({
 
   return (
     <div className="editor-grid">
-      <label>
-        Title
-        <input value={epic.title} onChange={(e) => onEpicChange({ ...epic, title: e.target.value })} />
-      </label>
-      <label>
-        Description
-        <textarea value={epic.description} onChange={(e) => onEpicChange({ ...epic, description: e.target.value })} />
-      </label>
+      <section className="review-box epic-box">
+        <h3>Epic</h3>
+        <label>
+          Title
+          <input value={epic.title} onChange={(e) => onEpicChange({ ...epic, title: e.target.value })} />
+        </label>
+        <label>
+          Description
+          <textarea value={epic.description} onChange={(e) => onEpicChange({ ...epic, description: e.target.value })} />
+        </label>
+      </section>
       <section className="child-editor">
         <div className="section-heading">
           <h3>Planned Stories</h3>
@@ -446,8 +449,12 @@ function EpicPlanEditor({
           <p className="empty-state">Generate an Epic plan or add Stories manually.</p>
         )}
         {plan?.stories.map((plannedStory, index) => (
-          <div className="child-item" key={index}>
-            <StoryEditor story={plannedStory} onChange={(story) => updateStory(index, story)} />
+          <div key={index}>
+            <StoryEditor
+              story={plannedStory}
+              heading={`Story ${index + 1}`}
+              onChange={(story) => updateStory(index, story)}
+            />
             <button type="button" onClick={() => removeStory(index)}>Remove Story</button>
           </div>
         ))}
@@ -459,12 +466,15 @@ function EpicPlanEditor({
 function StoryEditor({
   story,
   onChange,
+  heading = "Story",
 }: {
   story: StoryGenerationResult;
   onChange: (story: StoryGenerationResult) => void;
+  heading?: string;
 }) {
   return (
-    <div className="editor-grid">
+    <section className="review-box story-box">
+      <h3>{heading}</h3>
       <label>
         Title
         <input value={story.title} onChange={(e) => onChange({ ...story, title: e.target.value })} />
@@ -485,19 +495,22 @@ function StoryEditor({
         label="Implementation Tasks"
         onChange={(tasks) => onChange({ ...story, tasks })}
       />
-    </div>
+    </section>
   );
 }
 
 function TaskEditor({
   task,
   onChange,
+  heading = "Task",
 }: {
   task: TaskGenerationResult;
   onChange: (task: TaskGenerationResult) => void;
+  heading?: string;
 }) {
   return (
-    <div className="editor-grid">
+    <section className="review-box task-box">
+      <h3>{heading}</h3>
       <label>
         Title
         <input value={task.title} onChange={(e) => onChange({ ...task, title: e.target.value })} />
@@ -511,7 +524,7 @@ function TaskEditor({
         label="Sub-tasks"
         onChange={(subtasks) => onChange({ ...task, subtasks })}
       />
-    </div>
+    </section>
   );
 }
 
@@ -546,7 +559,8 @@ function ChildItemEditor({
       </div>
       {items.length === 0 && <p className="empty-state">No child items yet.</p>}
       {items.map((item, index) => (
-        <div className="child-item" key={index}>
+        <div className="review-box task-box nested" key={index}>
+          <h3>{label.replace(/s$/, "")} {index + 1}</h3>
           <label>
             Title
             <input
