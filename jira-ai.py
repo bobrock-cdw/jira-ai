@@ -3,7 +3,6 @@ import json
 import sys
 import subprocess
 from datetime import datetime
-from jira import JIRA
 
 from core.config import (
     DEFAULT_GCP_LOCATION,
@@ -22,6 +21,13 @@ from core.gemini import (
     create_gemini_client,
     generate_ai_content as core_generate_ai_content,
     test_gemini_connection,
+)
+from core.jira_client import (
+    build_issue_fields,
+    create_issue as core_create_issue,
+    create_jira_client,
+    get_current_user_display_name,
+    resolve_assignee_account_id,
 )
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -118,13 +124,12 @@ def startup():
 
     status("Connecting to Jira...")
     try:
-        jira = JIRA(
-            server=JIRA_SERVER,
-            basic_auth=(jira_credentials.username, jira_credentials.token),
+        jira = create_jira_client(JIRA_SERVER, jira_credentials)
+        print(f"✅ Authenticated to Jira: {get_current_user_display_name(jira)}")
+        ASSIGNEE_ACCOUNT_ID = resolve_assignee_account_id(
+            jira,
+            JIRA_ASSIGNEE_USERNAME,
         )
-        print(f"✅ Authenticated to Jira: {jira.myself()['displayName']}")
-        users = jira.search_users(query=JIRA_ASSIGNEE_USERNAME, maxResults=1)
-        ASSIGNEE_ACCOUNT_ID = users[0].accountId if users else None
     except Exception as e:
         print(f"❌ Jira Setup Failed: {e}")
         sys.exit(1)
@@ -258,22 +263,19 @@ def generate_ai_content(prompt_type, brief):
 
 
 def create_issue(issue_type, summary, description, parent=None):
-    fields = {
-        "project": {"key": JIRA_PROJECT_KEY},
-        "summary": summary,
-        "description": description,
-        "issuetype": {"name": issue_type},
-        "assignee": {"accountId": ASSIGNEE_ACCOUNT_ID} if ASSIGNEE_ACCOUNT_ID else None,
-    }
-    if JIRA_COMPONENT_NAME:
-        fields["components"] = [{"name": JIRA_COMPONENT_NAME}]
-    if parent:
-        fields["parent"] = {"key": parent}
-
+    fields = build_issue_fields(
+        project_key=JIRA_PROJECT_KEY,
+        issue_type=issue_type,
+        summary=summary,
+        description=description,
+        component_name=JIRA_COMPONENT_NAME,
+        assignee_account_id=ASSIGNEE_ACCOUNT_ID,
+        parent=parent,
+    )
     try:
-        issue = jira.create_issue(fields=fields)
-        print(f"✅ Created {issue_type}: {issue.key}")
-        return issue.key
+        issue_key = core_create_issue(jira, fields)
+        print(f"✅ Created {issue_type}: {issue_key}")
+        return issue_key
     except Exception as e:
         print(f"❌ Creation Failed: {e}")
         return None
