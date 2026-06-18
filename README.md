@@ -253,6 +253,12 @@ npm install
 npm run dev
 ```
 
+The frontend defaults to calling `http://localhost:8000`. To point it at a different FastAPI server, copy `frontend/.env.example` to `frontend/.env` and set:
+
+```sh
+VITE_API_BASE_URL=http://localhost:8000
+```
+
 Or use the Makefile shortcuts from the repo root:
 
 ```sh

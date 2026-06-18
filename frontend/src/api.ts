@@ -8,7 +8,10 @@ import type {
   TaskGenerationResult,
 } from "./types";
 
-export const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const FALLBACK_API_BASE_URL = "http://localhost:8000";
+
+export const DEFAULT_API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || FALLBACK_API_BASE_URL;
 
 async function requestJson<T>(
   apiBaseUrl: string,
