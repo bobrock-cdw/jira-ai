@@ -243,7 +243,15 @@ Override this with a comma-separated `CORS_ORIGINS` value in `.env`.
 
 ## Future React Frontend
 
-A React + Vite frontend plan is documented in `docs/react-frontend-plan.md`. Node.js is required before scaffolding and building the frontend.
+An initial React + Vite frontend scaffold lives in `frontend/`, and the implementation plan is documented in `docs/react-frontend-plan.md`. Node.js is required before installing dependencies and building the frontend.
+
+Once Node.js is installed:
+
+```sh
+cd frontend
+npm install
+npm run dev
+```
 
 ## Notes and Limitations
 

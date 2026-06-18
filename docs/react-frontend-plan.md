@@ -17,13 +17,14 @@ npm --version
 
 If those commands are unavailable, install Node.js with your preferred package manager or from the official installer.
 
-## Proposed Structure
+## Initial Structure
 
 ```text
 frontend/
   package.json
   index.html
   vite.config.ts
+  tsconfig.json
   src/
     App.tsx
     api.ts
