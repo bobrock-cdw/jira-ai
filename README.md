@@ -59,7 +59,13 @@ export JIRA_USERNAME=your.email@company.com
 export JIRA_API_TOKEN=your-jira-api-token
 ```
 
-The current script does not load `.env` files automatically.
+Or copy `.env.example` to `.env` and fill in your local values:
+
+```sh
+cp .env.example .env
+```
+
+`.env` is ignored by git and can provide Jira credentials plus defaults for Jira server, project, component, assignee, GCP project, GCP location, and Gemini model.
 
 ## Running
 

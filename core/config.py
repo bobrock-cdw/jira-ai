@@ -3,16 +3,25 @@ from dataclasses import dataclass
 
 from google.genai import types
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
-DEFAULT_GCP_PROJECT_ID = "cdw-gemini-cli-sbx"
-DEFAULT_GCP_LOCATION = "us-central1"
-DEFAULT_JIRA_SERVER = "https://projectultron.atlassian.net"
-DEFAULT_JIRA_PROJECT = "MC"
-DEFAULT_JIRA_COMPONENT = "Cloud"
-DEFAULT_JIRA_ASSIGNEE = "Bob Rock"
+
+if load_dotenv:
+    load_dotenv()
+
+
+DEFAULT_GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "cdw-gemini-cli-sbx")
+DEFAULT_GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
+DEFAULT_JIRA_SERVER = os.getenv("JIRA_SERVER", "https://projectultron.atlassian.net")
+DEFAULT_JIRA_PROJECT = os.getenv("JIRA_PROJECT_KEY", os.getenv("JIRA_PROJECT", "MC"))
+DEFAULT_JIRA_COMPONENT = os.getenv("JIRA_COMPONENT", "Cloud")
+DEFAULT_JIRA_ASSIGNEE = os.getenv("JIRA_ASSIGNEE", "Bob Rock")
 LARGE_PASTE_WARNING_CHARS = 4096
 MAX_BRIEF_CHARS = 500_000
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_REQUEST_TIMEOUT_MS = 120_000
 
 
