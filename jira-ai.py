@@ -1,13 +1,9 @@
 import os
 import json
 import sys
-import threading
-import time
 import subprocess
 from datetime import datetime
 from jira import JIRA
-from google import genai
-from google.genai import types
 
 from core.config import (
     DEFAULT_GCP_LOCATION,
@@ -20,17 +16,18 @@ from core.config import (
     LARGE_PASTE_WARNING_CHARS,
     MAX_BRIEF_CHARS,
     SessionConfig,
-    build_gemini_http_options,
     get_jira_credentials,
 )
-from core.models import validate_ai_response
+from core.gemini import (
+    create_gemini_client,
+    generate_ai_content as core_generate_ai_content,
+    test_gemini_connection,
+)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(line_buffering=True)
-
-GEMINI_HTTP_OPTIONS = build_gemini_http_options()
 
 # Session globals set during startup()
 JIRA_SERVER = None
@@ -47,17 +44,6 @@ ASSIGNEE_ACCOUNT_ID = None
 
 def status(message):
     print(message, file=sys.stderr, flush=True)
-
-
-def format_gemini_error(exc):
-    text = str(exc)
-    if "429" in text or "RESOURCE_EXHAUSTED" in text:
-        return (
-            f"{text}\n\n"
-            "Vertex AI rate limit or quota hit. This is not a hang — the API is throttling requests.\n"
-            "Wait a minute and retry, or check quotas in GCP Console → Vertex AI → Quotas."
-        )
-    return text
 
 
 def safe_input(prompt):
@@ -124,12 +110,7 @@ def startup():
 
     status(f"Initializing Gemini client ({GCP_PROJECT_ID}, {GCP_LOCATION})...")
     try:
-        client = genai.Client(
-            vertexai=True,
-            project=GCP_PROJECT_ID,
-            location=GCP_LOCATION,
-            http_options=GEMINI_HTTP_OPTIONS,
-        )
+        client = create_gemini_client(GCP_PROJECT_ID, GCP_LOCATION)
         print(f"✅ Gemini Client initialized for: {GCP_PROJECT_ID} ({GCP_LOCATION})")
     except Exception as e:
         print(f"❌ Vertex AI Initialization Failed: {e}")
@@ -248,27 +229,7 @@ def get_multiline_input(prompt):
     return text
 
 
-def _call_gemini(prompt):
-    return client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
-    )
-
-
 def generate_ai_content(prompt_type, brief):
-    prompts = {
-        "story": (
-            f"Act as an Expert Committee (PM, Dev, Architect, QA). Context: {PROJECT_CONTEXT}. "
-            f"Brief: {brief}. Return ONLY JSON: "
-            "{'title', 'user_story', 'acceptance_criteria', 'tasks': [{'title', 'description'}]}"
-        ),
-        "task": (
-            f"Act as a Lead Dev and Architect. Context: {PROJECT_CONTEXT}. Brief: {brief}. "
-            "Return ONLY JSON: {'title', 'description', 'subtasks': [{'title', 'description'}]}"
-        ),
-    }
-
     print(
         f"\n⏳ Generating with {GEMINI_MODEL} ({len(brief):,} char brief). "
         "Watch for progress below — usually 15–60s.",
@@ -278,44 +239,21 @@ def generate_ai_content(prompt_type, brief):
         f"Calling {GEMINI_MODEL} via Vertex AI. Progress updates every 2s..."
     )
 
-    result = {}
-    error = {}
-
-    def worker():
-        try:
-            result["response"] = _call_gemini(prompts[prompt_type])
-        except Exception as exc:
-            error["exc"] = exc
-
-    started_at = time.time()
-    worker_thread = threading.Thread(target=worker, daemon=True)
-    worker_thread.start()
-
-    while worker_thread.is_alive():
-        elapsed = int(time.time() - started_at)
-        status(f"Waiting for Gemini... {elapsed}s")
-        worker_thread.join(timeout=2)
-
-    if error:
-        print(f"\n❌ Gemini Error: {format_gemini_error(error['exc'])}")
-        return None
-
-    response = result.get("response")
-    if not response or not response.text:
-        print("\n❌ Gemini Error: empty response from model.")
-        return None
-
-    elapsed = int(time.time() - started_at)
-    status(f"Gemini responded in {elapsed}s.")
     try:
-        return validate_ai_response(prompt_type, json.loads(response.text))
+        data = core_generate_ai_content(
+            client=client,
+            prompt_type=prompt_type,
+            brief=brief,
+            project_context=PROJECT_CONTEXT,
+            progress_callback=status,
+        )
+        status("Gemini responded.")
+        return data
     except json.JSONDecodeError as exc:
         print(f"\n❌ Gemini Error: invalid JSON in response ({exc}).")
-        print(f"Raw response preview:\n{response.text[:500]}")
         return None
-    except ValueError as exc:
-        print(f"\n❌ Gemini Error: response did not match expected schema ({exc}).")
-        print(f"Raw response preview:\n{response.text[:500]}")
+    except Exception as exc:
+        print(f"\n❌ Gemini Error: {exc}")
         return None
 
 
@@ -347,23 +285,11 @@ def test_gemini():
     status(f"Gemini connectivity test: project={project}, location={location}")
 
     try:
-        test_client = genai.Client(
-            vertexai=True,
-            project=project,
-            location=location,
-            http_options=GEMINI_HTTP_OPTIONS,
-        )
         status("Client created. Sending test prompt...")
-        started = time.time()
-        response = test_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents='Return JSON: {"status":"ok"}',
-            config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
-        )
-        elapsed = int(time.time() - started)
-        print(f"✅ Gemini OK in {elapsed}s: {response.text}")
+        elapsed, response_text = test_gemini_connection(project, location)
+        print(f"✅ Gemini OK in {elapsed}s: {response_text}")
     except Exception as e:
-        print(f"❌ Gemini test failed: {format_gemini_error(e)}")
+        print(f"❌ Gemini test failed: {e}")
         sys.exit(1)
 
 
