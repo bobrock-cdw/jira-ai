@@ -225,12 +225,15 @@ Initial endpoints:
 - `GET /config/defaults`
 - `POST /test-gemini`
 - `POST /jira/resolve-assignee`
+- `POST /generate/epic`
 - `POST /generate/story`
 - `POST /generate/task`
 - `POST /preview/epic`
+- `POST /preview/epic-plan`
 - `POST /preview/story`
 - `POST /preview/task`
 - `POST /create/epic`
+- `POST /create/epic-plan`
 - `POST /create/story`
 - `POST /create/task`
 
@@ -277,7 +280,7 @@ make build-frontend
 
 ## Notes and Limitations
 
-- Epics can be created manually; there is no AI-generated Epic-to-Story breakdown yet.
+- Epics can be created manually or planned with AI-generated Stories and child tasks before creation.
 - Clipboard input currently uses macOS `pbpaste`.
 - Assignee lookup uses the first Jira user match.
 - Custom Jira fields and richer project-specific Jira metadata are planned future improvements.

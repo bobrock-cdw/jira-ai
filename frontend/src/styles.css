@@ -79,6 +79,10 @@ pre {
   margin-top: 1rem;
 }
 
+.button-row.compact {
+  margin-top: 0;
+}
+
 .editor-grid,
 .card label {
   display: grid;

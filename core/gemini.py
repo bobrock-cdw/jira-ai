@@ -34,6 +34,15 @@ def format_gemini_error(exc: Exception) -> str:
 
 
 def build_prompt(prompt_type: str, project_context: str, brief: str) -> str:
+    if prompt_type == "epic":
+        return (
+            "Act as an Expert Product Committee (PM, Architect, Lead Dev, QA). "
+            f"Context: {project_context}. Epic brief: {brief}. "
+            "Break the Epic into a small, reviewable implementation plan. Return ONLY JSON: "
+            "{'epic': {'title', 'description'}, "
+            "'stories': [{'title', 'user_story', 'acceptance_criteria', "
+            "'tasks': [{'title', 'description'}]}]}"
+        )
     if prompt_type == "story":
         return (
             "Act as an Expert Committee (PM, Dev, Architect, QA). "

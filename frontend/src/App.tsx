@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DEFAULT_API_BASE_URL,
   createEpic,
+  createEpicPlan,
   createStory,
   createTask,
+  generateEpicPlan,
   generateStory,
   generateTask,
   getConfigDefaults,
   health,
   previewEpic,
+  previewEpicPlan,
   previewStory,
   previewTask,
   resolveAssignee,
@@ -17,6 +20,7 @@ import {
 import type {
   CreateIssuesResponse,
   EpicIssue,
+  EpicPlanResult,
   GeneratedTask,
   IssueFieldsPreviewResponse,
   IssueType,
@@ -36,10 +40,11 @@ type Workflow = "epic" | "story" | "task";
 function canPreview(
   workflow: Workflow,
   epic: EpicIssue,
+  epicPlan: EpicPlanResult | null,
   story: StoryGenerationResult | null,
   task: TaskGenerationResult | null,
 ) {
-  if (workflow === "epic") return Boolean(epic.title && epic.description);
+  if (workflow === "epic") return Boolean(epicPlan || (epic.title && epic.description));
   if (workflow === "story") return Boolean(story);
   return Boolean(task);
 }
@@ -60,6 +65,7 @@ function App() {
   const [parentKey, setParentKey] = useState("");
   const [brief, setBrief] = useState("");
   const [epic, setEpic] = useState<EpicIssue>({ title: "", description: "" });
+  const [epicPlan, setEpicPlan] = useState<EpicPlanResult | null>(null);
   const [story, setStory] = useState<StoryGenerationResult | null>(null);
   const [task, setTask] = useState<TaskGenerationResult | null>(null);
   const [preview, setPreview] = useState<IssueFieldsPreviewResponse | null>(null);
@@ -77,6 +83,20 @@ function App() {
     ...jiraSettings,
     jira_server: jiraServer,
   };
+
+  useEffect(() => {
+    getConfigDefaults(DEFAULT_API_BASE_URL)
+      .then((defaults) => {
+        setJiraServer(defaults.jira_server);
+        setJiraServers(defaults.jira_servers);
+        setProjectKey(defaults.jira_project_key);
+        setComponentName(defaults.jira_component);
+        setAssigneeName(defaults.jira_assignee);
+      })
+      .catch((error) => {
+        setMessage(`Could not load backend defaults: ${error instanceof Error ? error.message : String(error)}`);
+      });
+  }, []);
 
   async function runAction(action: () => Promise<void>) {
     setLoading(true);
@@ -97,15 +117,21 @@ function App() {
     });
   }
 
+  async function loadDefaults(showSuccessMessage = true) {
+    const defaults = await getConfigDefaults(apiBaseUrl);
+    setJiraServer(defaults.jira_server);
+    setJiraServers(defaults.jira_servers);
+    setProjectKey(defaults.jira_project_key);
+    setComponentName(defaults.jira_component);
+    setAssigneeName(defaults.jira_assignee);
+    if (showSuccessMessage) {
+      setMessage("Loaded backend defaults.");
+    }
+  }
+
   async function handleLoadDefaults() {
     await runAction(async () => {
-      const defaults = await getConfigDefaults(apiBaseUrl);
-      setJiraServer(defaults.jira_server);
-      setJiraServers(defaults.jira_servers);
-      setProjectKey(defaults.jira_project_key);
-      setComponentName(defaults.jira_component);
-      setAssigneeName(defaults.jira_assignee);
-      setMessage("Loaded backend defaults.");
+      await loadDefaults();
     });
   }
 
@@ -130,11 +156,28 @@ function App() {
     setCreated(null);
   }
 
+  function handleEpicChange(nextEpic: EpicIssue) {
+    setEpic(nextEpic);
+    if (epicPlan) {
+      setEpicPlan({ ...epicPlan, epic: nextEpic });
+    }
+  }
+
   async function handleGenerate() {
     await runAction(async () => {
       setPreview(null);
       setCreated(null);
-      if (workflow === "story") {
+      if (workflow === "epic") {
+        const result = await generateEpicPlan(
+          apiBaseUrl,
+          projectContext,
+          `${epic.title}\n\n${epic.description}`.trim(),
+        );
+        setEpic(result.data.epic);
+        setEpicPlan(result.data);
+        setStory(null);
+        setTask(null);
+      } else if (workflow === "story") {
         const result = await generateStory(
           apiBaseUrl,
           projectContext,
@@ -156,7 +199,9 @@ function App() {
 
   async function handlePreview() {
     await runAction(async () => {
-      if (workflow === "epic") {
+      if (workflow === "epic" && epicPlan) {
+        setPreview(await previewEpicPlan(apiBaseUrl, jiraSettings, epicPlan));
+      } else if (workflow === "epic") {
         setPreview(await previewEpic(apiBaseUrl, jiraSettings, epic));
       }
       if (workflow === "story" && story) {
@@ -174,7 +219,9 @@ function App() {
     );
     if (!confirmed) return;
     await runAction(async () => {
-      if (workflow === "epic") {
+      if (workflow === "epic" && epicPlan) {
+        setCreated(await createEpicPlan(apiBaseUrl, jiraCreateSettings, epicPlan));
+      } else if (workflow === "epic") {
         setCreated(await createEpic(apiBaseUrl, jiraCreateSettings, epic));
       }
       if (workflow === "story" && story) {
@@ -245,22 +292,29 @@ function App() {
               <option value="task">Task</option>
             </select>
           </label>
+          <label>
+            Project Context
+            <textarea value={projectContext} onChange={(e) => setProjectContext(e.target.value)} />
+          </label>
           {workflow === "epic" && (
             <>
               <label>
                 Epic Title
                 <input
                   value={epic.title}
-                  onChange={(e) => setEpic({ ...epic, title: e.target.value })}
+                  onChange={(e) => handleEpicChange({ ...epic, title: e.target.value })}
                 />
               </label>
               <label>
                 Epic Description
                 <textarea
                   value={epic.description}
-                  onChange={(e) => setEpic({ ...epic, description: e.target.value })}
+                  onChange={(e) => handleEpicChange({ ...epic, description: e.target.value })}
                 />
               </label>
+              <button onClick={handleGenerate} disabled={loading || !epic.title || !epic.description}>
+                Generate Stories and Tasks
+              </button>
             </>
           )}
           {workflow === "task" && (
@@ -279,10 +333,6 @@ function App() {
                 <input value={parentKey} onChange={(e) => setParentKey(e.target.value)} />
               </label>
               <label>
-                Project Context
-                <textarea value={projectContext} onChange={(e) => setProjectContext(e.target.value)} />
-              </label>
-              <label>
                 Brief
                 <textarea value={brief} onChange={(e) => setBrief(e.target.value)} />
               </label>
@@ -295,7 +345,13 @@ function App() {
       <section className="card">
         <h2>Review</h2>
         {workflow === "epic" && (
-          <EpicEditor epic={epic} onChange={setEpic} />
+          <EpicPlanEditor
+            epic={epic}
+            plan={epicPlan}
+            onEpicChange={handleEpicChange}
+            onPlanChange={setEpicPlan}
+            onClearPlan={() => setEpicPlan(null)}
+          />
         )}
         {workflow === "story" && story && (
           <StoryEditor story={story} onChange={setStory} />
@@ -304,7 +360,7 @@ function App() {
           <TaskEditor task={task} onChange={setTask} />
         )}
         <div className="button-row">
-          <button onClick={handlePreview} disabled={loading || !canPreview(workflow, epic, story, task)}>
+          <button onClick={handlePreview} disabled={loading || !canPreview(workflow, epic, epicPlan, story, task)}>
             Preview Jira Payload
           </button>
           <button onClick={handleCreate} disabled={loading || !preview}>
@@ -320,23 +376,81 @@ function App() {
   );
 }
 
-function EpicEditor({
+function EpicPlanEditor({
   epic,
-  onChange,
+  plan,
+  onEpicChange,
+  onPlanChange,
+  onClearPlan,
 }: {
   epic: EpicIssue;
-  onChange: (epic: EpicIssue) => void;
+  plan: EpicPlanResult | null;
+  onEpicChange: (epic: EpicIssue) => void;
+  onPlanChange: (plan: EpicPlanResult) => void;
+  onClearPlan: () => void;
 }) {
+  function updateStory(index: number, story: StoryGenerationResult) {
+    if (!plan) return;
+    onPlanChange({
+      ...plan,
+      stories: plan.stories.map((currentStory, storyIndex) => (
+        storyIndex === index ? story : currentStory
+      )),
+    });
+  }
+
+  function removeStory(index: number) {
+    if (!plan) return;
+    onPlanChange({
+      ...plan,
+      stories: plan.stories.filter((_, storyIndex) => storyIndex !== index),
+    });
+  }
+
+  function addStory() {
+    const nextPlan = plan || { epic, stories: [] };
+    onPlanChange({
+      ...nextPlan,
+      stories: [
+        ...nextPlan.stories,
+        {
+          title: "",
+          user_story: "",
+          acceptance_criteria: [],
+          tasks: [],
+        },
+      ],
+    });
+  }
+
   return (
     <div className="editor-grid">
       <label>
         Title
-        <input value={epic.title} onChange={(e) => onChange({ ...epic, title: e.target.value })} />
+        <input value={epic.title} onChange={(e) => onEpicChange({ ...epic, title: e.target.value })} />
       </label>
       <label>
         Description
-        <textarea value={epic.description} onChange={(e) => onChange({ ...epic, description: e.target.value })} />
+        <textarea value={epic.description} onChange={(e) => onEpicChange({ ...epic, description: e.target.value })} />
       </label>
+      <section className="child-editor">
+        <div className="section-heading">
+          <h3>Planned Stories</h3>
+          <div className="button-row compact">
+            <button type="button" onClick={addStory}>Add Story</button>
+            {plan && <button type="button" onClick={onClearPlan}>Clear Plan</button>}
+          </div>
+        </div>
+        {!plan?.stories.length && (
+          <p className="empty-state">Generate an Epic plan or add Stories manually.</p>
+        )}
+        {plan?.stories.map((plannedStory, index) => (
+          <div className="child-item" key={index}>
+            <StoryEditor story={plannedStory} onChange={(story) => updateStory(index, story)} />
+            <button type="button" onClick={() => removeStory(index)}>Remove Story</button>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }

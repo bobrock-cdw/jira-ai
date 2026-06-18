@@ -57,6 +57,21 @@ class StoryGenerationResult(BaseModel):
         return _normalize_string_list(value)
 
 
+class EpicIssue(BaseModel):
+    title: str
+    description: str
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def normalize_text(cls, value: Any) -> str:
+        return _clean_string(value)
+
+
+class EpicPlanResult(BaseModel):
+    epic: EpicIssue
+    stories: list[StoryGenerationResult] = Field(default_factory=list)
+
+
 class TaskGenerationResult(BaseModel):
     title: str
     description: str
@@ -69,6 +84,8 @@ class TaskGenerationResult(BaseModel):
 
 
 def validate_ai_response(prompt_type: str, data: dict[str, Any]) -> dict[str, Any]:
+    if prompt_type == "epic":
+        return EpicPlanResult.model_validate(data).model_dump()
     if prompt_type == "story":
         return StoryGenerationResult.model_validate(data).model_dump()
     if prompt_type == "task":

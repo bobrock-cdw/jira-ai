@@ -97,6 +97,25 @@ def preview_epic_issue_fields(
     ]
 
 
+def preview_epic_plan_issue_fields(
+    context: JiraIssueContext,
+    plan_data: dict[str, Any],
+) -> list[dict[str, Any]]:
+    fields = preview_epic_issue_fields(
+        context=context,
+        title=plan_data["epic"]["title"],
+        description=plan_data["epic"]["description"],
+    )
+    for story in plan_data.get("stories", []):
+        story_fields = preview_story_issue_fields(
+            context=context,
+            story_data=story,
+            epic_key="<created-epic-key>",
+        )
+        fields.extend(story_fields)
+    return fields
+
+
 def preview_task_issue_fields(
     context: JiraIssueContext,
     task_data: dict[str, Any],
@@ -140,6 +159,30 @@ def create_epic(
             description=description,
         )
     ]
+
+
+def create_epic_plan(
+    jira_client: JIRA,
+    context: JiraIssueContext,
+    plan_data: dict[str, Any],
+) -> list[CreatedIssue]:
+    created = create_epic(
+        jira_client=jira_client,
+        context=context,
+        title=plan_data["epic"]["title"],
+        description=plan_data["epic"]["description"],
+    )
+    epic_key = created[0].key
+    for story in plan_data.get("stories", []):
+        created.extend(
+            create_story_with_tasks(
+                jira_client=jira_client,
+                context=context,
+                story_data=story,
+                epic_key=epic_key,
+            )
+        )
+    return created
 
 
 def create_story_with_tasks(

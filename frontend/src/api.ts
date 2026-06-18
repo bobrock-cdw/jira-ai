@@ -2,6 +2,7 @@ import type {
   AssigneeResolveResponse,
   ConfigDefaultsResponse,
   EpicIssue,
+  EpicPlanResult,
   CreateIssuesResponse,
   IssueFieldsPreviewResponse,
   IssueType,
@@ -83,6 +84,24 @@ export function generateStory(
   );
 }
 
+export function generateEpicPlan(
+  apiBaseUrl: string,
+  projectContext: string,
+  brief: string,
+) {
+  return requestJson<{ prompt_type: "epic"; data: EpicPlanResult }>(
+    apiBaseUrl,
+    "/generate/epic",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        project_context: projectContext,
+        brief,
+      }),
+    },
+  );
+}
+
 export function generateTask(
   apiBaseUrl: string,
   projectContext: string,
@@ -111,6 +130,20 @@ export function previewEpic(
     body: JSON.stringify({
       jira,
       epic,
+    }),
+  });
+}
+
+export function previewEpicPlan(
+  apiBaseUrl: string,
+  jira: JiraIssueSettings,
+  plan: EpicPlanResult,
+): Promise<IssueFieldsPreviewResponse> {
+  return requestJson(apiBaseUrl, "/preview/epic-plan", {
+    method: "POST",
+    body: JSON.stringify({
+      jira,
+      plan,
     }),
   });
 }
@@ -159,6 +192,20 @@ export function createEpic(
     body: JSON.stringify({
       jira,
       epic,
+    }),
+  });
+}
+
+export function createEpicPlan(
+  apiBaseUrl: string,
+  jira: JiraCreateSettings,
+  plan: EpicPlanResult,
+): Promise<CreateIssuesResponse> {
+  return requestJson(apiBaseUrl, "/create/epic-plan", {
+    method: "POST",
+    body: JSON.stringify({
+      jira,
+      plan,
     }),
   });
 }

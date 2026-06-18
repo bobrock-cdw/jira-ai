@@ -34,6 +34,11 @@ export interface EpicIssue {
   description: string;
 }
 
+export interface EpicPlanResult {
+  epic: EpicIssue;
+  stories: StoryGenerationResult[];
+}
+
 export interface GenerateResponse<T> {
   prompt_type: PromptType;
   data: T;

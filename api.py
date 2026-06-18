@@ -27,9 +27,11 @@ from core.service import (
     CreatedIssue,
     JiraIssueContext,
     create_epic,
+    create_epic_plan,
     create_story_with_tasks,
     create_task_with_subtasks,
     preview_epic_issue_fields,
+    preview_epic_plan_issue_fields,
     preview_story_issue_fields,
     preview_task_issue_fields,
 )
@@ -61,7 +63,7 @@ class GenerateRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
-    prompt_type: Literal["story", "task"]
+    prompt_type: Literal["epic", "story", "task"]
     data: dict
 
 
@@ -121,9 +123,19 @@ class EpicIssue(BaseModel):
     description: str
 
 
+class EpicPlan(BaseModel):
+    epic: EpicIssue
+    stories: list[StoryGenerationResult] = Field(default_factory=list)
+
+
 class EpicPreviewRequest(BaseModel):
     jira: JiraIssueSettings
     epic: EpicIssue
+
+
+class EpicPlanPreviewRequest(BaseModel):
+    jira: JiraIssueSettings
+    plan: EpicPlan
 
 
 class StoryCreateRequest(BaseModel):
@@ -135,6 +147,11 @@ class StoryCreateRequest(BaseModel):
 class EpicCreateRequest(BaseModel):
     jira: JiraCreateSettings
     epic: EpicIssue
+
+
+class EpicPlanCreateRequest(BaseModel):
+    jira: JiraCreateSettings
+    plan: EpicPlan
 
 
 class TaskCreateRequest(BaseModel):
@@ -189,7 +206,7 @@ def test_gemini(settings: GeminiSettings | None = None) -> GeminiTestResponse:
     )
 
 
-def generate_content(prompt_type: Literal["story", "task"], request: GenerateRequest) -> GenerateResponse:
+def generate_content(prompt_type: Literal["epic", "story", "task"], request: GenerateRequest) -> GenerateResponse:
     try:
         client = create_gemini_client(
             DEFAULT_GCP_PROJECT_ID,
@@ -204,6 +221,14 @@ def generate_content(prompt_type: Literal["story", "task"], request: GenerateReq
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return GenerateResponse(prompt_type=prompt_type, data=data)
+
+
+@app.post(
+    "/generate/epic",
+    responses={502: {"description": "Epic plan generation failed"}},
+)
+def generate_epic(request: GenerateRequest) -> GenerateResponse:
+    return generate_content("epic", request)
 
 
 @app.post(
@@ -311,6 +336,20 @@ def preview_epic(request: EpicPreviewRequest) -> IssueFieldsPreviewResponse:
     return IssueFieldsPreviewResponse(fields=fields)
 
 
+@app.post("/preview/epic-plan")
+def preview_epic_plan(request: EpicPlanPreviewRequest) -> IssueFieldsPreviewResponse:
+    context = JiraIssueContext(
+        project_key=request.jira.project_key,
+        component_name=request.jira.component_name,
+        assignee_account_id=request.jira.assignee_account_id,
+    )
+    fields = preview_epic_plan_issue_fields(
+        context=context,
+        plan_data=request.plan.model_dump(),
+    )
+    return IssueFieldsPreviewResponse(fields=fields)
+
+
 @app.post("/preview/task")
 def preview_task(request: TaskPreviewRequest) -> IssueFieldsPreviewResponse:
     context = JiraIssueContext(
@@ -342,6 +381,28 @@ def create_epic_endpoint(request: EpicCreateRequest) -> CreateIssuesResponse:
             context=build_issue_context(request.jira),
             title=request.epic.title,
             description=request.epic.description,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return to_create_response(created)
+
+
+@app.post(
+    "/create/epic-plan",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira Epic plan creation failed"},
+    },
+)
+def create_epic_plan_endpoint(request: EpicPlanCreateRequest) -> CreateIssuesResponse:
+    try:
+        jira_client = get_authenticated_jira_client(request.jira)
+        created = create_epic_plan(
+            jira_client=jira_client,
+            context=build_issue_context(request.jira),
+            plan_data=request.plan.model_dump(),
         )
     except HTTPException:
         raise

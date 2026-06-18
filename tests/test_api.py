@@ -97,6 +97,34 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(fields[0]["issuetype"]["name"], "Epic")
         self.assertEqual(fields[0]["summary"], "Epic title")
 
+    def test_preview_epic_plan_endpoint(self):
+        response = self.client.post(
+            "/preview/epic-plan",
+            json={
+                "jira": {"project_key": "MC"},
+                "plan": {
+                    "epic": {
+                        "title": "Epic title",
+                        "description": "Epic description",
+                    },
+                    "stories": [
+                        {
+                            "title": "Story title",
+                            "user_story": "As a user, I want value.",
+                            "acceptance_criteria": ["First"],
+                            "tasks": [{"title": "Build", "description": "Do work"}],
+                        }
+                    ],
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        fields = response.json()["fields"]
+        self.assertEqual(len(fields), 3)
+        self.assertEqual(fields[0]["issuetype"]["name"], "Epic")
+        self.assertEqual(fields[1]["parent"]["key"], "<created-epic-key>")
+
     def test_create_task_endpoint_uses_mocked_jira_creation(self):
         from core.config import JiraCredentials
         from core.service import CreatedIssue
@@ -175,6 +203,54 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(
             response.json(),
             {"created": [{"issue_type": "Epic", "key": "MC-100"}]},
+        )
+
+    def test_create_epic_plan_endpoint_uses_mocked_jira_creation(self):
+        from core.config import JiraCredentials
+        from core.service import CreatedIssue
+
+        original_get_credentials = self.api.get_jira_credentials
+        original_create_client = self.api.create_jira_client
+        original_create_epic_plan = self.api.create_epic_plan
+        self.addCleanup(setattr, self.api, "get_jira_credentials", original_get_credentials)
+        self.addCleanup(setattr, self.api, "create_jira_client", original_create_client)
+        self.addCleanup(setattr, self.api, "create_epic_plan", original_create_epic_plan)
+
+        self.api.get_jira_credentials = lambda: JiraCredentials(
+            username="user",
+            token="token",
+        )
+        self.api.create_jira_client = lambda server, credentials: object()
+        self.api.create_epic_plan = (
+            lambda jira_client, context, plan_data: [
+                CreatedIssue(issue_type="Epic", key="MC-100"),
+                CreatedIssue(issue_type="Story", key="MC-101"),
+            ]
+        )
+
+        response = self.client.post(
+            "/create/epic-plan",
+            json={
+                "jira": {"project_key": "MC"},
+                "plan": {
+                    "epic": {
+                        "title": "Epic title",
+                        "description": "Epic description",
+                    },
+                    "stories": [],
+                },
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "created": [
+                    {"issue_type": "Epic", "key": "MC-100"},
+                    {"issue_type": "Story", "key": "MC-101"},
+                ]
+            },
         )
 
     def test_resolve_assignee_endpoint_uses_mocked_jira_lookup(self):

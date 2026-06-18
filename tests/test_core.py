@@ -6,6 +6,7 @@ from core.models import validate_ai_response
 from core.service import (
     JiraIssueContext,
     preview_epic_issue_fields,
+    preview_epic_plan_issue_fields,
     preview_story_issue_fields,
     preview_task_issue_fields,
 )
@@ -42,6 +43,25 @@ class CoreModelTests(unittest.TestCase):
 
         self.assertEqual(data["title"], "Task title")
         self.assertEqual(data["subtasks"][0]["title"], "Sub")
+
+    def test_epic_plan_response_is_normalized(self):
+        data = validate_ai_response(
+            "epic",
+            {
+                "epic": {"title": " Epic ", "description": " Description "},
+                "stories": [
+                    {
+                        "title": " Story ",
+                        "user_story": " As a user, I want value. ",
+                        "acceptance_criteria": "First; Second",
+                        "tasks": [{"title": " Build ", "description": " Do work "}],
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(data["epic"]["title"], "Epic")
+        self.assertEqual(data["stories"][0]["acceptance_criteria"], ["First", "Second"])
 
 
 class CoreFormattingTests(unittest.TestCase):
@@ -104,6 +124,27 @@ class JiraPayloadTests(unittest.TestCase):
         self.assertEqual(fields[0]["issuetype"]["name"], "Epic")
         self.assertEqual(fields[0]["summary"], "Epic title")
         self.assertEqual(fields[0]["description"], "Epic description")
+
+    def test_preview_epic_plan_issue_fields(self):
+        context = JiraIssueContext(project_key="MC")
+        plan_data = {
+            "epic": {"title": "Epic title", "description": "Epic description"},
+            "stories": [
+                {
+                    "title": "Story title",
+                    "user_story": "As a user, I want value.",
+                    "acceptance_criteria": ["First"],
+                    "tasks": [{"title": "Build", "description": "Do work"}],
+                }
+            ],
+        }
+
+        fields = preview_epic_plan_issue_fields(context, plan_data)
+
+        self.assertEqual(len(fields), 3)
+        self.assertEqual(fields[0]["issuetype"]["name"], "Epic")
+        self.assertEqual(fields[1]["parent"]["key"], "<created-epic-key>")
+        self.assertEqual(fields[2]["parent"]["key"], "<created-story-key>")
 
     def test_preview_task_issue_fields(self):
         context = JiraIssueContext(project_key="MC")

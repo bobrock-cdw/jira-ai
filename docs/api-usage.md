@@ -18,11 +18,11 @@ http://localhost:8000
 2. Call `GET /config/defaults` to prefill non-secret backend defaults and Jira server choices.
 3. Call `POST /jira/resolve-assignee` to turn an assignee display name into a Jira account ID.
 4. Call `POST /test-gemini` from the settings screen to confirm Vertex AI access.
-5. For Stories or Tasks, call `POST /generate/story` or `POST /generate/task` to generate AI content.
+5. For Epic plans, Stories, or Tasks, call `POST /generate/epic`, `POST /generate/story`, or `POST /generate/task` to generate AI content.
 6. Let the user edit generated content, or manually enter Epic details.
-7. Call `POST /preview/epic`, `POST /preview/story`, or `POST /preview/task` to show the exact Jira payloads.
+7. Call `POST /preview/epic-plan`, `POST /preview/epic`, `POST /preview/story`, or `POST /preview/task` to show the exact Jira payloads.
 8. Require explicit user confirmation.
-9. Call `POST /create/epic`, `POST /create/story`, or `POST /create/task` to create real Jira issues.
+9. Call `POST /create/epic-plan`, `POST /create/epic`, `POST /create/story`, or `POST /create/task` to create real Jira issues.
 
 Use preview endpoints before create endpoints. The create endpoints call Jira and create real issues.
 
@@ -131,6 +131,44 @@ Example response shape:
 }
 ```
 
+## Generate Epic Plan
+
+```sh
+curl -X POST http://localhost:8000/generate/epic \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_context": "Python CLI and FastAPI app for Jira automation",
+    "brief": "Improve the browser UI for creating Jira issues"
+  }'
+```
+
+Example response shape:
+
+```json
+{
+  "prompt_type": "epic",
+  "data": {
+    "epic": {
+      "title": "Improve Jira-AI Browser UI",
+      "description": "Create a guided browser workflow for Jira issue creation."
+    },
+    "stories": [
+      {
+        "title": "Configure Jira Settings",
+        "user_story": "As a user, I want to configure Jira settings in the UI.",
+        "acceptance_criteria": ["Settings can be reviewed before creating issues"],
+        "tasks": [
+          {
+            "title": "Build settings panel",
+            "description": "Add editable Jira settings fields."
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 ## Generate Task
 
 ```sh
@@ -156,6 +194,39 @@ curl -X POST http://localhost:8000/preview/epic \
     "epic": {
       "title": "Improve Jira-AI UI",
       "description": "Create a browser-based workflow for generating and creating Jira issues."
+    }
+  }'
+```
+
+## Preview Epic Plan Payloads
+
+```sh
+curl -X POST http://localhost:8000/preview/epic-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira": {
+      "project_key": "MC",
+      "component_name": "Cloud",
+      "assignee_account_id": "abc123"
+    },
+    "plan": {
+      "epic": {
+        "title": "Improve Jira-AI UI",
+        "description": "Create a browser-based workflow for generating and creating Jira issues."
+      },
+      "stories": [
+        {
+          "title": "Configure Jira Settings",
+          "user_story": "As a user, I want to configure Jira settings in the UI.",
+          "acceptance_criteria": ["Settings can be reviewed before creating issues"],
+          "tasks": [
+            {
+              "title": "Build settings panel",
+              "description": "Add editable Jira settings fields."
+            }
+          ]
+        }
+      ]
     }
   }'
 ```
@@ -290,6 +361,30 @@ curl -X POST http://localhost:8000/create/epic \
     "epic": {
       "title": "Improve Jira-AI UI",
       "description": "Create a browser-based workflow for generating and creating Jira issues."
+    }
+  }'
+```
+
+## Create Epic Plan
+
+This endpoint creates a real Jira Epic, then creates the reviewed Stories under that Epic, then creates each Story's reviewed Sub-tasks. Use `/preview/epic-plan` first.
+
+```sh
+curl -X POST http://localhost:8000/create/epic-plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira": {
+      "jira_server": "https://yourcompany.atlassian.net",
+      "project_key": "MC",
+      "component_name": "Cloud",
+      "assignee_account_id": "abc123"
+    },
+    "plan": {
+      "epic": {
+        "title": "Improve Jira-AI UI",
+        "description": "Create a browser-based workflow for generating and creating Jira issues."
+      },
+      "stories": []
     }
   }'
 ```
