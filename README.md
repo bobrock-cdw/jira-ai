@@ -202,6 +202,8 @@ Initial endpoints:
 
 The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. The create endpoints use `JIRA_USERNAME` and `JIRA_API_TOKEN` from the server environment and create real Jira issues, so use the preview endpoints first when testing UI flows.
 
+Detailed API request and response examples are documented in `docs/api-usage.md`.
+
 For browser-based development, the API enables CORS for Vite's default localhost origins:
 
 - `http://localhost:5173`

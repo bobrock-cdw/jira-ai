@@ -34,6 +34,8 @@ frontend/
 
 ## API Endpoints Used
 
+See `docs/api-usage.md` for request and response examples.
+
 - `GET /health` — verify backend is running.
 - `POST /test-gemini` — verify Vertex AI/Gemini connectivity.
 - `POST /generate/story` — generate Story JSON from context and brief.
