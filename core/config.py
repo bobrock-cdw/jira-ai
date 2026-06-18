@@ -23,6 +23,10 @@ LARGE_PASTE_WARNING_CHARS = 4096
 MAX_BRIEF_CHARS = 500_000
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_REQUEST_TIMEOUT_MS = 120_000
+DEFAULT_CORS_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+)
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,17 @@ def get_jira_credentials() -> JiraCredentials | None:
     if not (username and token):
         return None
     return JiraCredentials(username=username, token=token)
+
+
+def get_cors_origins() -> list[str]:
+    raw_origins = os.getenv("CORS_ORIGINS")
+    if not raw_origins:
+        return list(DEFAULT_CORS_ORIGINS)
+    return [
+        origin.strip()
+        for origin in raw_origins.split(",")
+        if origin.strip()
+    ]
 
 
 def build_gemini_http_options() -> types.HttpOptions:

@@ -1,9 +1,16 @@
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from core.config import DEFAULT_GCP_LOCATION, DEFAULT_GCP_PROJECT_ID, DEFAULT_JIRA_SERVER, get_jira_credentials
+from core.config import (
+    DEFAULT_GCP_LOCATION,
+    DEFAULT_GCP_PROJECT_ID,
+    DEFAULT_JIRA_SERVER,
+    get_cors_origins,
+    get_jira_credentials,
+)
 from core.gemini import (
     create_gemini_client,
     generate_ai_content,
@@ -25,6 +32,14 @@ app = FastAPI(
     title="Jira-AI API",
     description="Minimal FastAPI backend for AI-assisted Jira issue generation.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

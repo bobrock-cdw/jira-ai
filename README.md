@@ -202,6 +202,13 @@ Initial endpoints:
 
 The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. The create endpoints use `JIRA_USERNAME` and `JIRA_API_TOKEN` from the server environment and create real Jira issues, so use the preview endpoints first when testing UI flows.
 
+For browser-based development, the API enables CORS for Vite's default localhost origins:
+
+- `http://localhost:5173`
+- `http://127.0.0.1:5173`
+
+Override this with a comma-separated `CORS_ORIGINS` value in `.env`.
+
 ## Future React Frontend
 
 A React + Vite frontend plan is documented in `docs/react-frontend-plan.md`. Node.js is required before scaffolding and building the frontend.
