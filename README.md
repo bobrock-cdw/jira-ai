@@ -179,8 +179,10 @@ Initial endpoints:
 - `POST /test-gemini`
 - `POST /generate/story`
 - `POST /generate/task`
+- `POST /preview/story`
+- `POST /preview/task`
 
-The API skeleton currently supports Gemini connectivity checks and AI generation only. Jira issue creation endpoints should be added after the backend auth/config model is finalized.
+The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. Jira issue creation endpoints should be added after the backend auth/config model is finalized.
 
 ## Notes and Limitations
 

@@ -9,6 +9,12 @@ from core.gemini import (
     generate_ai_content,
     test_gemini_connection,
 )
+from core.models import StoryGenerationResult, TaskGenerationResult
+from core.service import (
+    JiraIssueContext,
+    preview_story_issue_fields,
+    preview_task_issue_fields,
+)
 
 
 app = FastAPI(
@@ -36,6 +42,29 @@ class GenerateResponse(BaseModel):
 class GeminiTestResponse(BaseModel):
     elapsed_seconds: int
     response_text: str
+
+
+class JiraIssueSettings(BaseModel):
+    project_key: str
+    component_name: str | None = None
+    assignee_account_id: str | None = None
+
+
+class StoryPreviewRequest(BaseModel):
+    jira: JiraIssueSettings
+    story: StoryGenerationResult
+    epic_key: str | None = None
+
+
+class TaskPreviewRequest(BaseModel):
+    jira: JiraIssueSettings
+    task: TaskGenerationResult
+    issue_type: Literal["Task", "Sub-task"] = "Task"
+    parent_key: str | None = None
+
+
+class IssueFieldsPreviewResponse(BaseModel):
+    fields: list[dict]
 
 
 @app.get("/health")
@@ -92,3 +121,34 @@ def generate_story(request: GenerateRequest) -> GenerateResponse:
 )
 def generate_task(request: GenerateRequest) -> GenerateResponse:
     return generate_content("task", request)
+
+
+@app.post("/preview/story")
+def preview_story(request: StoryPreviewRequest) -> IssueFieldsPreviewResponse:
+    context = JiraIssueContext(
+        project_key=request.jira.project_key,
+        component_name=request.jira.component_name,
+        assignee_account_id=request.jira.assignee_account_id,
+    )
+    fields = preview_story_issue_fields(
+        context=context,
+        story_data=request.story.model_dump(),
+        epic_key=request.epic_key,
+    )
+    return IssueFieldsPreviewResponse(fields=fields)
+
+
+@app.post("/preview/task")
+def preview_task(request: TaskPreviewRequest) -> IssueFieldsPreviewResponse:
+    context = JiraIssueContext(
+        project_key=request.jira.project_key,
+        component_name=request.jira.component_name,
+        assignee_account_id=request.jira.assignee_account_id,
+    )
+    fields = preview_task_issue_fields(
+        context=context,
+        task_data=request.task.model_dump(),
+        issue_type=request.issue_type,
+        parent=request.parent_key,
+    )
+    return IssueFieldsPreviewResponse(fields=fields)
