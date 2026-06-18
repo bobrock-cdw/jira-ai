@@ -43,7 +43,7 @@ This structure prepares the project for a future FastAPI + React UI because the 
 Install the core dependencies:
 
 ```sh
-pip install jira google-genai pydantic
+pip install -r requirements.txt
 ```
 
 Authenticate with Google Cloud:
