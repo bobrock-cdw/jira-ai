@@ -23,6 +23,7 @@ from core.config import (
     build_gemini_http_options,
     get_jira_credentials,
 )
+from core.models import validate_ai_response
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
@@ -307,9 +308,13 @@ def generate_ai_content(prompt_type, brief):
     elapsed = int(time.time() - started_at)
     status(f"Gemini responded in {elapsed}s.")
     try:
-        return json.loads(response.text)
+        return validate_ai_response(prompt_type, json.loads(response.text))
     except json.JSONDecodeError as exc:
         print(f"\n❌ Gemini Error: invalid JSON in response ({exc}).")
+        print(f"Raw response preview:\n{response.text[:500]}")
+        return None
+    except ValueError as exc:
+        print(f"\n❌ Gemini Error: response did not match expected schema ({exc}).")
         print(f"Raw response preview:\n{response.text[:500]}")
         return None
 
