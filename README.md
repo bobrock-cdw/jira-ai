@@ -253,6 +253,14 @@ npm install
 npm run dev
 ```
 
+Or use the Makefile shortcuts from the repo root:
+
+```sh
+make install-frontend
+make run-frontend
+make build-frontend
+```
+
 ## Notes and Limitations
 
 - Epics are manual only; there is no AI-generated Epic-to-Story breakdown yet.
