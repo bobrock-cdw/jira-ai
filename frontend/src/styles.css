@@ -93,3 +93,33 @@ pre {
   background: #eff6ff;
   color: #1e3a8a;
 }
+
+.child-editor {
+  border-top: 1px solid #e5e7eb;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.section-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.section-heading h3 {
+  margin: 0;
+}
+
+.child-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-top: 0.75rem;
+  padding: 1rem;
+}
+
+.empty-state {
+  color: #6b7280;
+  margin: 0.75rem 0 0;
+}

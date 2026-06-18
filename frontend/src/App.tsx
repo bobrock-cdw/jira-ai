@@ -14,6 +14,7 @@ import {
 } from "./api";
 import type {
   CreateIssuesResponse,
+  GeneratedTask,
   IssueFieldsPreviewResponse,
   IssueType,
   JiraCreateSettings,
@@ -299,6 +300,11 @@ function StoryEditor({
           onChange={(e) => onChange({ ...story, acceptance_criteria: e.target.value.split("\n").filter(Boolean) })}
         />
       </label>
+      <ChildItemEditor
+        items={story.tasks}
+        label="Implementation Tasks"
+        onChange={(tasks) => onChange({ ...story, tasks })}
+      />
     </div>
   );
 }
@@ -320,7 +326,65 @@ function TaskEditor({
         Description
         <textarea value={task.description} onChange={(e) => onChange({ ...task, description: e.target.value })} />
       </label>
+      <ChildItemEditor
+        items={task.subtasks}
+        label="Sub-tasks"
+        onChange={(subtasks) => onChange({ ...task, subtasks })}
+      />
     </div>
+  );
+}
+
+function ChildItemEditor({
+  items,
+  label,
+  onChange,
+}: {
+  items: GeneratedTask[];
+  label: string;
+  onChange: (items: GeneratedTask[]) => void;
+}) {
+  function updateItem(index: number, patch: Partial<GeneratedTask>) {
+    onChange(items.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, ...patch } : item
+    )));
+  }
+
+  function removeItem(index: number) {
+    onChange(items.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function addItem() {
+    onChange([...items, { title: "", description: "" }]);
+  }
+
+  return (
+    <section className="child-editor">
+      <div className="section-heading">
+        <h3>{label}</h3>
+        <button type="button" onClick={addItem}>Add</button>
+      </div>
+      {items.length === 0 && <p className="empty-state">No child items yet.</p>}
+      {items.map((item, index) => (
+        <div className="child-item" key={index}>
+          <label>
+            Title
+            <input
+              value={item.title}
+              onChange={(e) => updateItem(index, { title: e.target.value })}
+            />
+          </label>
+          <label>
+            Description
+            <textarea
+              value={item.description}
+              onChange={(e) => updateItem(index, { description: e.target.value })}
+            />
+          </label>
+          <button type="button" onClick={() => removeItem(index)}>Remove</button>
+        </div>
+      ))}
+    </section>
   );
 }
 
