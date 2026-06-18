@@ -224,6 +224,7 @@ Initial endpoints:
 - `GET /health`
 - `GET /config/defaults`
 - `POST /test-gemini`
+- `POST /jira/resolve-assignee`
 - `POST /generate/story`
 - `POST /generate/task`
 - `POST /preview/story`
@@ -263,6 +264,7 @@ VITE_GCP_LOCATION=us-central1
 VITE_JIRA_SERVER=https://yourcompany.atlassian.net
 VITE_JIRA_PROJECT_KEY=MC
 VITE_JIRA_COMPONENT=Cloud
+VITE_JIRA_ASSIGNEE=Your Name
 ```
 
 Or use the Makefile shortcuts from the repo root:

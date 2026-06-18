@@ -56,3 +56,8 @@ export interface ConfigDefaultsResponse {
   jira_component: string;
   jira_assignee: string;
 }
+
+export interface AssigneeResolveResponse {
+  assignee_name: string;
+  account_id: string;
+}

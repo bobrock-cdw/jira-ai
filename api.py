@@ -21,7 +21,7 @@ from core.gemini import (
     test_gemini_connection,
 )
 from core.models import StoryGenerationResult, TaskGenerationResult
-from core.jira_client import create_jira_client
+from core.jira_client import create_jira_client, resolve_assignee_account_id
 from core.service import (
     CreatedIssue,
     JiraIssueContext,
@@ -85,6 +85,16 @@ class JiraIssueSettings(BaseModel):
 
 class JiraCreateSettings(JiraIssueSettings):
     jira_server: str = DEFAULT_JIRA_SERVER
+
+
+class AssigneeResolveRequest(BaseModel):
+    jira_server: str = DEFAULT_JIRA_SERVER
+    assignee_name: str
+
+
+class AssigneeResolveResponse(BaseModel):
+    assignee_name: str
+    account_id: str
 
 
 class StoryPreviewRequest(BaseModel):
@@ -203,14 +213,18 @@ def build_issue_context(settings: JiraIssueSettings) -> JiraIssueContext:
     )
 
 
-def get_authenticated_jira_client(settings: JiraCreateSettings):
+def get_authenticated_jira_client_for_server(jira_server: str):
     credentials = get_jira_credentials()
     if not credentials:
         raise HTTPException(
             status_code=401,
             detail="JIRA_USERNAME or JIRA_API_TOKEN not found.",
         )
-    return create_jira_client(settings.jira_server, credentials)
+    return create_jira_client(jira_server, credentials)
+
+
+def get_authenticated_jira_client(settings: JiraCreateSettings):
+    return get_authenticated_jira_client_for_server(settings.jira_server)
 
 
 def to_create_response(created: list[CreatedIssue]) -> CreateIssuesResponse:
@@ -219,6 +233,34 @@ def to_create_response(created: list[CreatedIssue]) -> CreateIssuesResponse:
             CreatedIssueResponse(issue_type=issue.issue_type, key=issue.key)
             for issue in created
         ]
+    )
+
+
+@app.post(
+    "/jira/resolve-assignee",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        404: {"description": "Assignee was not found"},
+        502: {"description": "Jira assignee lookup failed"},
+    },
+)
+def resolve_assignee(request: AssigneeResolveRequest) -> AssigneeResolveResponse:
+    try:
+        jira_client = get_authenticated_jira_client_for_server(request.jira_server)
+        account_id = resolve_assignee_account_id(jira_client, request.assignee_name)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    if not account_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Assignee not found: {request.assignee_name}",
+        )
+    return AssigneeResolveResponse(
+        assignee_name=request.assignee_name,
+        account_id=account_id,
     )
 
 

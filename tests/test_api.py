@@ -81,6 +81,13 @@ class ApiTests(unittest.TestCase):
         from core.config import JiraCredentials
         from core.service import CreatedIssue
 
+        original_get_credentials = self.api.get_jira_credentials
+        original_create_client = self.api.create_jira_client
+        original_create_task = self.api.create_task_with_subtasks
+        self.addCleanup(setattr, self.api, "get_jira_credentials", original_get_credentials)
+        self.addCleanup(setattr, self.api, "create_jira_client", original_create_client)
+        self.addCleanup(setattr, self.api, "create_task_with_subtasks", original_create_task)
+
         self.api.get_jira_credentials = lambda: JiraCredentials(
             username="user",
             token="token",
@@ -109,6 +116,47 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(
             response.json(),
             {"created": [{"issue_type": "Task", "key": "MC-200"}]},
+        )
+
+    def test_resolve_assignee_endpoint_uses_mocked_jira_lookup(self):
+        from core.config import JiraCredentials
+
+        original_get_credentials = self.api.get_jira_credentials
+        original_create_client = self.api.create_jira_client
+        original_resolve_assignee = self.api.resolve_assignee_account_id
+        self.addCleanup(setattr, self.api, "get_jira_credentials", original_get_credentials)
+        self.addCleanup(setattr, self.api, "create_jira_client", original_create_client)
+        self.addCleanup(
+            setattr,
+            self.api,
+            "resolve_assignee_account_id",
+            original_resolve_assignee,
+        )
+
+        jira_client = object()
+        self.api.get_jira_credentials = lambda: JiraCredentials(
+            username="user",
+            token="token",
+        )
+        self.api.create_jira_client = lambda server, credentials: jira_client
+        self.api.resolve_assignee_account_id = (
+            lambda client, assignee_name: "account-123"
+            if client is jira_client and assignee_name == "Bob Rock"
+            else None
+        )
+
+        response = self.client.post(
+            "/jira/resolve-assignee",
+            json={
+                "jira_server": "https://example.atlassian.net",
+                "assignee_name": "Bob Rock",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"assignee_name": "Bob Rock", "account_id": "account-123"},
         )
 
 

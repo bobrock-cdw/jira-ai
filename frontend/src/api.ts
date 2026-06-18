@@ -1,4 +1,5 @@
 import type {
+  AssigneeResolveResponse,
   ConfigDefaultsResponse,
   CreateIssuesResponse,
   IssueFieldsPreviewResponse,
@@ -53,6 +54,20 @@ export function testGemini(
     body: JSON.stringify({
       gcp_project_id: gcpProjectId,
       gcp_location: gcpLocation,
+    }),
+  });
+}
+
+export function resolveAssignee(
+  apiBaseUrl: string,
+  jiraServer: string,
+  assigneeName: string,
+): Promise<AssigneeResolveResponse> {
+  return requestJson(apiBaseUrl, "/jira/resolve-assignee", {
+    method: "POST",
+    body: JSON.stringify({
+      jira_server: jiraServer,
+      assignee_name: assigneeName,
     }),
   });
 }

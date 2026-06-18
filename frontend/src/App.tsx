@@ -9,6 +9,7 @@ import {
   health,
   previewStory,
   previewTask,
+  resolveAssignee,
   testGemini,
 } from "./api";
 import type {
@@ -26,6 +27,7 @@ const DEFAULT_GCP_LOCATION = import.meta.env.VITE_GCP_LOCATION || "us-central1";
 const DEFAULT_JIRA_SERVER = import.meta.env.VITE_JIRA_SERVER || "";
 const DEFAULT_JIRA_PROJECT_KEY = import.meta.env.VITE_JIRA_PROJECT_KEY || "";
 const DEFAULT_JIRA_COMPONENT = import.meta.env.VITE_JIRA_COMPONENT || "";
+const DEFAULT_JIRA_ASSIGNEE = import.meta.env.VITE_JIRA_ASSIGNEE || "";
 
 type Workflow = "story" | "task";
 
@@ -36,6 +38,7 @@ function App() {
   const [jiraServer, setJiraServer] = useState(DEFAULT_JIRA_SERVER);
   const [projectKey, setProjectKey] = useState(DEFAULT_JIRA_PROJECT_KEY);
   const [componentName, setComponentName] = useState(DEFAULT_JIRA_COMPONENT);
+  const [assigneeName, setAssigneeName] = useState(DEFAULT_JIRA_ASSIGNEE);
   const [assigneeAccountId, setAssigneeAccountId] = useState("");
   const [projectContext, setProjectContext] = useState("");
   const [workflow, setWorkflow] = useState<Workflow>("story");
@@ -87,7 +90,16 @@ function App() {
       setJiraServer(defaults.jira_server);
       setProjectKey(defaults.jira_project_key);
       setComponentName(defaults.jira_component);
+      setAssigneeName(defaults.jira_assignee);
       setMessage("Loaded backend defaults.");
+    });
+  }
+
+  async function handleResolveAssignee() {
+    await runAction(async () => {
+      const result = await resolveAssignee(apiBaseUrl, jiraServer, assigneeName);
+      setAssigneeAccountId(result.account_id);
+      setMessage(`Resolved ${result.assignee_name} to ${result.account_id}.`);
     });
   }
 
@@ -187,11 +199,18 @@ function App() {
             <input value={componentName} onChange={(e) => setComponentName(e.target.value)} />
           </label>
           <label>
+            Assignee Name
+            <input value={assigneeName} onChange={(e) => setAssigneeName(e.target.value)} />
+          </label>
+          <label>
             Assignee Account ID
             <input value={assigneeAccountId} onChange={(e) => setAssigneeAccountId(e.target.value)} />
           </label>
           <div className="button-row">
             <button onClick={handleLoadDefaults} disabled={loading}>Load Backend Defaults</button>
+            <button onClick={handleResolveAssignee} disabled={loading || !jiraServer || !assigneeName}>
+              Resolve Assignee
+            </button>
             <button onClick={handleHealth} disabled={loading}>Test Backend</button>
             <button onClick={handleTestGemini} disabled={loading}>Test Gemini</button>
           </div>

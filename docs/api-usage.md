@@ -16,12 +16,13 @@ http://localhost:8000
 
 1. Call `GET /health` to confirm the backend is available.
 2. Call `GET /config/defaults` to prefill non-secret backend defaults.
-3. Call `POST /test-gemini` from the settings screen to confirm Vertex AI access.
-4. Call `POST /generate/story` or `POST /generate/task` to generate AI content.
-5. Let the user edit the generated content in the React UI.
-6. Call `POST /preview/story` or `POST /preview/task` to show the exact Jira payloads.
-7. Require explicit user confirmation.
-8. Call `POST /create/story` or `POST /create/task` to create real Jira issues.
+3. Call `POST /jira/resolve-assignee` to turn an assignee display name into a Jira account ID.
+4. Call `POST /test-gemini` from the settings screen to confirm Vertex AI access.
+5. Call `POST /generate/story` or `POST /generate/task` to generate AI content.
+6. Let the user edit the generated content in the React UI.
+7. Call `POST /preview/story` or `POST /preview/task` to show the exact Jira payloads.
+8. Require explicit user confirmation.
+9. Call `POST /create/story` or `POST /create/task` to create real Jira issues.
 
 Use preview endpoints before create endpoints. The create endpoints call Jira and create real issues.
 
@@ -56,6 +57,28 @@ Example response:
   "jira_project_key": "MC",
   "jira_component": "Cloud",
   "jira_assignee": "Your Name"
+}
+```
+
+## Resolve Jira Assignee
+
+This endpoint uses server-side Jira credentials from `JIRA_USERNAME` and `JIRA_API_TOKEN`.
+
+```sh
+curl -X POST http://localhost:8000/jira/resolve-assignee \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira_server": "https://yourcompany.atlassian.net",
+    "assignee_name": "Your Name"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "assignee_name": "Your Name",
+  "account_id": "abc123"
 }
 ```
 
