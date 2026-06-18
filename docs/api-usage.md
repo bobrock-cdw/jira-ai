@@ -15,12 +15,13 @@ http://localhost:8000
 ## Recommended Frontend Flow
 
 1. Call `GET /health` to confirm the backend is available.
-2. Call `POST /test-gemini` from the settings screen to confirm Vertex AI access.
-3. Call `POST /generate/story` or `POST /generate/task` to generate AI content.
-4. Let the user edit the generated content in the React UI.
-5. Call `POST /preview/story` or `POST /preview/task` to show the exact Jira payloads.
-6. Require explicit user confirmation.
-7. Call `POST /create/story` or `POST /create/task` to create real Jira issues.
+2. Call `GET /config/defaults` to prefill non-secret backend defaults.
+3. Call `POST /test-gemini` from the settings screen to confirm Vertex AI access.
+4. Call `POST /generate/story` or `POST /generate/task` to generate AI content.
+5. Let the user edit the generated content in the React UI.
+6. Call `POST /preview/story` or `POST /preview/task` to show the exact Jira payloads.
+7. Require explicit user confirmation.
+8. Call `POST /create/story` or `POST /create/task` to create real Jira issues.
 
 Use preview endpoints before create endpoints. The create endpoints call Jira and create real issues.
 
@@ -35,6 +36,26 @@ Expected response:
 ```json
 {
   "status": "ok"
+}
+```
+
+## Config Defaults
+
+```sh
+curl http://localhost:8000/config/defaults
+```
+
+Example response:
+
+```json
+{
+  "gcp_project_id": "your-gcp-project-id",
+  "gcp_location": "us-central1",
+  "gemini_model": "gemini-2.5-flash",
+  "jira_server": "https://yourcompany.atlassian.net",
+  "jira_project_key": "MC",
+  "jira_component": "Cloud",
+  "jira_assignee": "Your Name"
 }
 ```
 

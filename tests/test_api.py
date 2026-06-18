@@ -20,6 +20,23 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
 
+    def test_config_defaults_endpoint(self):
+        response = self.client.get("/config/defaults")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.json()),
+            {
+                "gcp_project_id",
+                "gcp_location",
+                "gemini_model",
+                "jira_server",
+                "jira_project_key",
+                "jira_component",
+                "jira_assignee",
+            },
+        )
+
     def test_cors_preflight_allows_vite_origin(self):
         response = self.client.options(
             "/health",

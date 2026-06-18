@@ -222,6 +222,7 @@ make run-api
 Initial endpoints:
 
 - `GET /health`
+- `GET /config/defaults`
 - `POST /test-gemini`
 - `POST /generate/story`
 - `POST /generate/task`
@@ -232,7 +233,7 @@ Initial endpoints:
 
 The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. The create endpoints use `JIRA_USERNAME` and `JIRA_API_TOKEN` from the server environment and create real Jira issues, so use the preview endpoints first when testing UI flows.
 
-Detailed API request and response examples are documented in `docs/api-usage.md`.
+The config defaults endpoint returns non-secret Jira and Gemini defaults from the backend environment so the frontend can prefill local form settings. Detailed API request and response examples are documented in `docs/api-usage.md`.
 
 For browser-based development, the API enables CORS for Vite's default localhost origins:
 

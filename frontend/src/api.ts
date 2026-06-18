@@ -1,4 +1,5 @@
 import type {
+  ConfigDefaultsResponse,
   CreateIssuesResponse,
   IssueFieldsPreviewResponse,
   IssueType,
@@ -36,6 +37,10 @@ async function requestJson<T>(
 
 export function health(apiBaseUrl: string): Promise<{ status: string }> {
   return requestJson(apiBaseUrl, "/health");
+}
+
+export function getConfigDefaults(apiBaseUrl: string): Promise<ConfigDefaultsResponse> {
+  return requestJson(apiBaseUrl, "/config/defaults");
 }
 
 export function testGemini(

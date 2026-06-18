@@ -46,3 +46,13 @@ export interface CreatedIssue {
 export interface CreateIssuesResponse {
   created: CreatedIssue[];
 }
+
+export interface ConfigDefaultsResponse {
+  gcp_project_id: string;
+  gcp_location: string;
+  gemini_model: string;
+  jira_server: string;
+  jira_project_key: string;
+  jira_component: string;
+  jira_assignee: string;
+}

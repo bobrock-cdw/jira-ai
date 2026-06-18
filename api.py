@@ -7,7 +7,11 @@ from pydantic import BaseModel, Field
 from core.config import (
     DEFAULT_GCP_LOCATION,
     DEFAULT_GCP_PROJECT_ID,
+    DEFAULT_JIRA_ASSIGNEE,
+    DEFAULT_JIRA_COMPONENT,
+    DEFAULT_JIRA_PROJECT,
     DEFAULT_JIRA_SERVER,
+    GEMINI_MODEL,
     get_cors_origins,
     get_jira_credentials,
 )
@@ -63,6 +67,16 @@ class GeminiTestResponse(BaseModel):
     response_text: str
 
 
+class ConfigDefaultsResponse(BaseModel):
+    gcp_project_id: str
+    gcp_location: str
+    gemini_model: str
+    jira_server: str
+    jira_project_key: str
+    jira_component: str
+    jira_assignee: str
+
+
 class JiraIssueSettings(BaseModel):
     project_key: str
     component_name: str | None = None
@@ -115,6 +129,19 @@ class CreateIssuesResponse(BaseModel):
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/config/defaults")
+def config_defaults() -> ConfigDefaultsResponse:
+    return ConfigDefaultsResponse(
+        gcp_project_id=DEFAULT_GCP_PROJECT_ID,
+        gcp_location=DEFAULT_GCP_LOCATION,
+        gemini_model=GEMINI_MODEL,
+        jira_server=DEFAULT_JIRA_SERVER,
+        jira_project_key=DEFAULT_JIRA_PROJECT,
+        jira_component=DEFAULT_JIRA_COMPONENT,
+        jira_assignee=DEFAULT_JIRA_ASSIGNEE,
+    )
 
 
 @app.post(

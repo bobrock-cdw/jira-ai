@@ -5,6 +5,7 @@ import {
   createTask,
   generateStory,
   generateTask,
+  getConfigDefaults,
   health,
   previewStory,
   previewTask,
@@ -75,6 +76,18 @@ function App() {
     await runAction(async () => {
       const result = await health(apiBaseUrl);
       setMessage(`Backend status: ${result.status}`);
+    });
+  }
+
+  async function handleLoadDefaults() {
+    await runAction(async () => {
+      const defaults = await getConfigDefaults(apiBaseUrl);
+      setGcpProjectId(defaults.gcp_project_id);
+      setGcpLocation(defaults.gcp_location);
+      setJiraServer(defaults.jira_server);
+      setProjectKey(defaults.jira_project_key);
+      setComponentName(defaults.jira_component);
+      setMessage("Loaded backend defaults.");
     });
   }
 
@@ -178,6 +191,7 @@ function App() {
             <input value={assigneeAccountId} onChange={(e) => setAssigneeAccountId(e.target.value)} />
           </label>
           <div className="button-row">
+            <button onClick={handleLoadDefaults} disabled={loading}>Load Backend Defaults</button>
             <button onClick={handleHealth} disabled={loading}>Test Backend</button>
             <button onClick={handleTestGemini} disabled={loading}>Test Gemini</button>
           </div>
