@@ -75,10 +75,22 @@ Test Gemini connectivity without starting Jira setup:
 python3 -u jira-ai.py --test-gemini
 ```
 
+Or use the shortcut:
+
+```sh
+make test-gemini
+```
+
 Run the CLI:
 
 ```sh
 python3 -u jira-ai.py
+```
+
+Or use:
+
+```sh
+make run-cli
 ```
 
 At startup, the script prompts for:
@@ -103,6 +115,18 @@ Run the lightweight automated test suite:
 
 ```sh
 python3 -m unittest discover
+```
+
+Or use:
+
+```sh
+make test
+```
+
+Run syntax checks plus tests:
+
+```sh
+make check
 ```
 
 Core tests use only the standard library test runner. API tests require the optional FastAPI dependencies from `requirements-api.txt`; they mock Jira creation helpers and do not create live Jira issues.
@@ -187,6 +211,12 @@ Run the API:
 
 ```sh
 uvicorn api:app --reload
+```
+
+Or use:
+
+```sh
+make run-api
 ```
 
 Initial endpoints:
