@@ -5,6 +5,7 @@ from core.jira_client import build_issue_fields
 from core.models import validate_ai_response
 from core.service import (
     JiraIssueContext,
+    preview_epic_issue_fields,
     preview_story_issue_fields,
     preview_task_issue_fields,
 )
@@ -89,6 +90,20 @@ class JiraPayloadTests(unittest.TestCase):
         self.assertEqual(fields[0]["parent"]["key"], "MC-1")
         self.assertEqual(fields[1]["issuetype"]["name"], "Sub-task")
         self.assertEqual(fields[1]["parent"]["key"], "<created-story-key>")
+
+    def test_preview_epic_issue_fields(self):
+        context = JiraIssueContext(project_key="MC", component_name="Cloud")
+
+        fields = preview_epic_issue_fields(
+            context,
+            title="Epic title",
+            description="Epic description",
+        )
+
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(fields[0]["issuetype"]["name"], "Epic")
+        self.assertEqual(fields[0]["summary"], "Epic title")
+        self.assertEqual(fields[0]["description"], "Epic description")
 
     def test_preview_task_issue_fields(self):
         context = JiraIssueContext(project_key="MC")

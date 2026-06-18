@@ -15,14 +15,14 @@ http://localhost:8000
 ## Recommended Frontend Flow
 
 1. Call `GET /health` to confirm the backend is available.
-2. Call `GET /config/defaults` to prefill non-secret backend defaults.
+2. Call `GET /config/defaults` to prefill non-secret backend defaults and Jira server choices.
 3. Call `POST /jira/resolve-assignee` to turn an assignee display name into a Jira account ID.
 4. Call `POST /test-gemini` from the settings screen to confirm Vertex AI access.
-5. Call `POST /generate/story` or `POST /generate/task` to generate AI content.
-6. Let the user edit the generated content in the React UI.
-7. Call `POST /preview/story` or `POST /preview/task` to show the exact Jira payloads.
+5. For Stories or Tasks, call `POST /generate/story` or `POST /generate/task` to generate AI content.
+6. Let the user edit generated content, or manually enter Epic details.
+7. Call `POST /preview/epic`, `POST /preview/story`, or `POST /preview/task` to show the exact Jira payloads.
 8. Require explicit user confirmation.
-9. Call `POST /create/story` or `POST /create/task` to create real Jira issues.
+9. Call `POST /create/epic`, `POST /create/story`, or `POST /create/task` to create real Jira issues.
 
 Use preview endpoints before create endpoints. The create endpoints call Jira and create real issues.
 
@@ -50,10 +50,12 @@ Example response:
 
 ```json
 {
-  "gcp_project_id": "your-gcp-project-id",
-  "gcp_location": "us-central1",
   "gemini_model": "gemini-2.5-flash",
   "jira_server": "https://yourcompany.atlassian.net",
+  "jira_servers": [
+    "https://yourcompany.atlassian.net",
+    "https://sandbox.atlassian.net"
+  ],
   "jira_project_key": "MC",
   "jira_component": "Cloud",
   "jira_assignee": "Your Name"
@@ -137,6 +139,24 @@ curl -X POST http://localhost:8000/generate/task \
   -d '{
     "project_context": "Python CLI and FastAPI app for Jira automation",
     "brief": "Add backend validation for Jira payload preview requests"
+  }'
+```
+
+## Preview Epic Payload
+
+```sh
+curl -X POST http://localhost:8000/preview/epic \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira": {
+      "project_key": "MC",
+      "component_name": "Cloud",
+      "assignee_account_id": "abc123"
+    },
+    "epic": {
+      "title": "Improve Jira-AI UI",
+      "description": "Create a browser-based workflow for generating and creating Jira issues."
+    }
   }'
 ```
 
@@ -251,6 +271,27 @@ Example response:
     }
   ]
 }
+```
+
+## Create Epic
+
+This endpoint creates a real Jira Epic. Use `/preview/epic` first.
+
+```sh
+curl -X POST http://localhost:8000/create/epic \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira": {
+      "jira_server": "https://yourcompany.atlassian.net",
+      "project_key": "MC",
+      "component_name": "Cloud",
+      "assignee_account_id": "abc123"
+    },
+    "epic": {
+      "title": "Improve Jira-AI UI",
+      "description": "Create a browser-based workflow for generating and creating Jira issues."
+    }
+  }'
 ```
 
 ## Create Task

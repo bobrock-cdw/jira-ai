@@ -227,14 +227,16 @@ Initial endpoints:
 - `POST /jira/resolve-assignee`
 - `POST /generate/story`
 - `POST /generate/task`
+- `POST /preview/epic`
 - `POST /preview/story`
 - `POST /preview/task`
+- `POST /create/epic`
 - `POST /create/story`
 - `POST /create/task`
 
 The preview endpoints return the Jira field payloads that would be sent to Jira, without creating any issues. The create endpoints use `JIRA_USERNAME` and `JIRA_API_TOKEN` from the server environment and create real Jira issues, so use the preview endpoints first when testing UI flows.
 
-The config defaults endpoint returns non-secret Jira and Gemini defaults from the backend environment so the frontend can prefill local form settings. Detailed API request and response examples are documented in `docs/api-usage.md`.
+The config defaults endpoint returns non-secret Jira defaults, Jira server options, and the Gemini model from the backend environment so the frontend can prefill local form settings without exposing GCP configuration. Detailed API request and response examples are documented in `docs/api-usage.md`.
 
 For browser-based development, the API enables CORS for Vite's default localhost origins:
 
@@ -259,8 +261,6 @@ The frontend defaults to calling `http://localhost:8000`. To point it at a diffe
 
 ```sh
 VITE_API_BASE_URL=http://localhost:8000
-VITE_GCP_PROJECT_ID=your-gcp-project-id
-VITE_GCP_LOCATION=us-central1
 VITE_JIRA_SERVER=https://yourcompany.atlassian.net
 VITE_JIRA_PROJECT_KEY=MC
 VITE_JIRA_COMPONENT=Cloud
@@ -277,8 +277,8 @@ make build-frontend
 
 ## Notes and Limitations
 
-- Epics are manual only; there is no AI-generated Epic-to-Story breakdown yet.
+- Epics can be created manually; there is no AI-generated Epic-to-Story breakdown yet.
 - Clipboard input currently uses macOS `pbpaste`.
 - Assignee lookup uses the first Jira user match.
-- `.env` support, dry-run mode, custom fields, and a FastAPI + React UI are planned future improvements.
+- Custom Jira fields and richer project-specific Jira metadata are planned future improvements.
 - Deliberation logs are useful for debugging or audit history, but they are not required for the script to run.

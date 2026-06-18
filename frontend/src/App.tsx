@@ -1,12 +1,14 @@
 import { useState } from "react";
 import {
   DEFAULT_API_BASE_URL,
+  createEpic,
   createStory,
   createTask,
   generateStory,
   generateTask,
   getConfigDefaults,
   health,
+  previewEpic,
   previewStory,
   previewTask,
   resolveAssignee,
@@ -14,6 +16,7 @@ import {
 } from "./api";
 import type {
   CreateIssuesResponse,
+  EpicIssue,
   GeneratedTask,
   IssueFieldsPreviewResponse,
   IssueType,
@@ -23,20 +26,30 @@ import type {
   TaskGenerationResult,
 } from "./types";
 
-const DEFAULT_GCP_PROJECT = import.meta.env.VITE_GCP_PROJECT_ID || "";
-const DEFAULT_GCP_LOCATION = import.meta.env.VITE_GCP_LOCATION || "us-central1";
 const DEFAULT_JIRA_SERVER = import.meta.env.VITE_JIRA_SERVER || "";
 const DEFAULT_JIRA_PROJECT_KEY = import.meta.env.VITE_JIRA_PROJECT_KEY || "";
 const DEFAULT_JIRA_COMPONENT = import.meta.env.VITE_JIRA_COMPONENT || "";
 const DEFAULT_JIRA_ASSIGNEE = import.meta.env.VITE_JIRA_ASSIGNEE || "";
 
-type Workflow = "story" | "task";
+type Workflow = "epic" | "story" | "task";
+
+function canPreview(
+  workflow: Workflow,
+  epic: EpicIssue,
+  story: StoryGenerationResult | null,
+  task: TaskGenerationResult | null,
+) {
+  if (workflow === "epic") return Boolean(epic.title && epic.description);
+  if (workflow === "story") return Boolean(story);
+  return Boolean(task);
+}
 
 function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
-  const [gcpProjectId, setGcpProjectId] = useState(DEFAULT_GCP_PROJECT);
-  const [gcpLocation, setGcpLocation] = useState(DEFAULT_GCP_LOCATION);
   const [jiraServer, setJiraServer] = useState(DEFAULT_JIRA_SERVER);
+  const [jiraServers, setJiraServers] = useState(
+    DEFAULT_JIRA_SERVER ? [DEFAULT_JIRA_SERVER] : [],
+  );
   const [projectKey, setProjectKey] = useState(DEFAULT_JIRA_PROJECT_KEY);
   const [componentName, setComponentName] = useState(DEFAULT_JIRA_COMPONENT);
   const [assigneeName, setAssigneeName] = useState(DEFAULT_JIRA_ASSIGNEE);
@@ -46,6 +59,7 @@ function App() {
   const [issueType, setIssueType] = useState<IssueType>("Task");
   const [parentKey, setParentKey] = useState("");
   const [brief, setBrief] = useState("");
+  const [epic, setEpic] = useState<EpicIssue>({ title: "", description: "" });
   const [story, setStory] = useState<StoryGenerationResult | null>(null);
   const [task, setTask] = useState<TaskGenerationResult | null>(null);
   const [preview, setPreview] = useState<IssueFieldsPreviewResponse | null>(null);
@@ -86,9 +100,8 @@ function App() {
   async function handleLoadDefaults() {
     await runAction(async () => {
       const defaults = await getConfigDefaults(apiBaseUrl);
-      setGcpProjectId(defaults.gcp_project_id);
-      setGcpLocation(defaults.gcp_location);
       setJiraServer(defaults.jira_server);
+      setJiraServers(defaults.jira_servers);
       setProjectKey(defaults.jira_project_key);
       setComponentName(defaults.jira_component);
       setAssigneeName(defaults.jira_assignee);
@@ -106,9 +119,15 @@ function App() {
 
   async function handleTestGemini() {
     await runAction(async () => {
-      const result = await testGemini(apiBaseUrl, gcpProjectId, gcpLocation);
+      const result = await testGemini(apiBaseUrl);
       setMessage(`Gemini OK in ${result.elapsed_seconds}s: ${result.response_text}`);
     });
+  }
+
+  function handleWorkflowChange(nextWorkflow: Workflow) {
+    setWorkflow(nextWorkflow);
+    setPreview(null);
+    setCreated(null);
   }
 
   async function handleGenerate() {
@@ -120,8 +139,6 @@ function App() {
           apiBaseUrl,
           projectContext,
           brief,
-          gcpProjectId,
-          gcpLocation,
         );
         setStory(result.data);
         setTask(null);
@@ -130,8 +147,6 @@ function App() {
           apiBaseUrl,
           projectContext,
           brief,
-          gcpProjectId,
-          gcpLocation,
         );
         setTask(result.data);
         setStory(null);
@@ -141,6 +156,9 @@ function App() {
 
   async function handlePreview() {
     await runAction(async () => {
+      if (workflow === "epic") {
+        setPreview(await previewEpic(apiBaseUrl, jiraSettings, epic));
+      }
       if (workflow === "story" && story) {
         setPreview(await previewStory(apiBaseUrl, jiraSettings, story, parentKey));
       }
@@ -156,6 +174,9 @@ function App() {
     );
     if (!confirmed) return;
     await runAction(async () => {
+      if (workflow === "epic") {
+        setCreated(await createEpic(apiBaseUrl, jiraCreateSettings, epic));
+      }
       if (workflow === "story" && story) {
         setCreated(await createStory(apiBaseUrl, jiraCreateSettings, story, parentKey));
       }
@@ -180,16 +201,13 @@ function App() {
             <input value={apiBaseUrl} onChange={(e) => setApiBaseUrl(e.target.value)} />
           </label>
           <label>
-            GCP Project
-            <input value={gcpProjectId} onChange={(e) => setGcpProjectId(e.target.value)} />
-          </label>
-          <label>
-            GCP Location
-            <input value={gcpLocation} onChange={(e) => setGcpLocation(e.target.value)} />
-          </label>
-          <label>
             Jira Server
-            <input value={jiraServer} onChange={(e) => setJiraServer(e.target.value)} />
+            <select value={jiraServer} onChange={(e) => setJiraServer(e.target.value)}>
+              {jiraServers.length === 0 && <option value="">Load backend defaults</option>}
+              {jiraServers.map((server) => (
+                <option key={server} value={server}>{server}</option>
+              ))}
+            </select>
           </label>
           <label>
             Jira Project Key
@@ -221,11 +239,30 @@ function App() {
           <h2>Generate</h2>
           <label>
             Workflow
-            <select value={workflow} onChange={(e) => setWorkflow(e.target.value as Workflow)}>
+            <select value={workflow} onChange={(e) => handleWorkflowChange(e.target.value as Workflow)}>
+              <option value="epic">Epic</option>
               <option value="story">Story</option>
               <option value="task">Task</option>
             </select>
           </label>
+          {workflow === "epic" && (
+            <>
+              <label>
+                Epic Title
+                <input
+                  value={epic.title}
+                  onChange={(e) => setEpic({ ...epic, title: e.target.value })}
+                />
+              </label>
+              <label>
+                Epic Description
+                <textarea
+                  value={epic.description}
+                  onChange={(e) => setEpic({ ...epic, description: e.target.value })}
+                />
+              </label>
+            </>
+          )}
           {workflow === "task" && (
             <label>
               Issue Type
@@ -235,24 +272,31 @@ function App() {
               </select>
             </label>
           )}
-          <label>
-            Parent Key
-            <input value={parentKey} onChange={(e) => setParentKey(e.target.value)} />
-          </label>
-          <label>
-            Project Context
-            <textarea value={projectContext} onChange={(e) => setProjectContext(e.target.value)} />
-          </label>
-          <label>
-            Brief
-            <textarea value={brief} onChange={(e) => setBrief(e.target.value)} />
-          </label>
-          <button onClick={handleGenerate} disabled={loading || !brief}>Generate</button>
+          {workflow !== "epic" && (
+            <>
+              <label>
+                Parent Key
+                <input value={parentKey} onChange={(e) => setParentKey(e.target.value)} />
+              </label>
+              <label>
+                Project Context
+                <textarea value={projectContext} onChange={(e) => setProjectContext(e.target.value)} />
+              </label>
+              <label>
+                Brief
+                <textarea value={brief} onChange={(e) => setBrief(e.target.value)} />
+              </label>
+              <button onClick={handleGenerate} disabled={loading || !brief}>Generate</button>
+            </>
+          )}
         </div>
       </section>
 
       <section className="card">
         <h2>Review</h2>
+        {workflow === "epic" && (
+          <EpicEditor epic={epic} onChange={setEpic} />
+        )}
         {workflow === "story" && story && (
           <StoryEditor story={story} onChange={setStory} />
         )}
@@ -260,7 +304,7 @@ function App() {
           <TaskEditor task={task} onChange={setTask} />
         )}
         <div className="button-row">
-          <button onClick={handlePreview} disabled={loading || (!story && !task)}>
+          <button onClick={handlePreview} disabled={loading || !canPreview(workflow, epic, story, task)}>
             Preview Jira Payload
           </button>
           <button onClick={handleCreate} disabled={loading || !preview}>
@@ -273,6 +317,27 @@ function App() {
       {preview && <JsonPanel title="Preview Payloads" value={preview} />}
       {created && <JsonPanel title="Created Issues" value={created} />}
     </main>
+  );
+}
+
+function EpicEditor({
+  epic,
+  onChange,
+}: {
+  epic: EpicIssue;
+  onChange: (epic: EpicIssue) => void;
+}) {
+  return (
+    <div className="editor-grid">
+      <label>
+        Title
+        <input value={epic.title} onChange={(e) => onChange({ ...epic, title: e.target.value })} />
+      </label>
+      <label>
+        Description
+        <textarea value={epic.description} onChange={(e) => onChange({ ...epic, description: e.target.value })} />
+      </label>
+    </div>
   );
 }
 

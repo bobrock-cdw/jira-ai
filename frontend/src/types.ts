@@ -29,6 +29,11 @@ export interface TaskGenerationResult {
   subtasks: GeneratedTask[];
 }
 
+export interface EpicIssue {
+  title: string;
+  description: string;
+}
+
 export interface GenerateResponse<T> {
   prompt_type: PromptType;
   data: T;
@@ -48,10 +53,9 @@ export interface CreateIssuesResponse {
 }
 
 export interface ConfigDefaultsResponse {
-  gcp_project_id: string;
-  gcp_location: string;
   gemini_model: string;
   jira_server: string;
+  jira_servers: string[];
   jira_project_key: string;
   jira_component: string;
   jira_assignee: string;

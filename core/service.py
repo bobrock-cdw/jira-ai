@@ -82,6 +82,21 @@ def preview_story_issue_fields(
     return [story_fields, *subtask_fields]
 
 
+def preview_epic_issue_fields(
+    context: JiraIssueContext,
+    title: str,
+    description: str,
+) -> list[dict[str, Any]]:
+    return [
+        build_issue_fields_from_context(
+            context=context,
+            issue_type="Epic",
+            summary=title,
+            description=description,
+        )
+    ]
+
+
 def preview_task_issue_fields(
     context: JiraIssueContext,
     task_data: dict[str, Any],
@@ -108,6 +123,23 @@ def preview_task_issue_fields(
             for subtask in task_data.get("subtasks", [])
         )
     return fields
+
+
+def create_epic(
+    jira_client: JIRA,
+    context: JiraIssueContext,
+    title: str,
+    description: str,
+) -> list[CreatedIssue]:
+    return [
+        create_issue_from_context(
+            jira_client=jira_client,
+            context=context,
+            issue_type="Epic",
+            summary=title,
+            description=description,
+        )
+    ]
 
 
 def create_story_with_tasks(

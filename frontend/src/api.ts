@@ -1,6 +1,7 @@
 import type {
   AssigneeResolveResponse,
   ConfigDefaultsResponse,
+  EpicIssue,
   CreateIssuesResponse,
   IssueFieldsPreviewResponse,
   IssueType,
@@ -44,17 +45,9 @@ export function getConfigDefaults(apiBaseUrl: string): Promise<ConfigDefaultsRes
   return requestJson(apiBaseUrl, "/config/defaults");
 }
 
-export function testGemini(
-  apiBaseUrl: string,
-  gcpProjectId: string,
-  gcpLocation: string,
-): Promise<{ elapsed_seconds: number; response_text: string }> {
+export function testGemini(apiBaseUrl: string): Promise<{ elapsed_seconds: number; response_text: string }> {
   return requestJson(apiBaseUrl, "/test-gemini", {
     method: "POST",
-    body: JSON.stringify({
-      gcp_project_id: gcpProjectId,
-      gcp_location: gcpLocation,
-    }),
   });
 }
 
@@ -76,8 +69,6 @@ export function generateStory(
   apiBaseUrl: string,
   projectContext: string,
   brief: string,
-  gcpProjectId: string,
-  gcpLocation: string,
 ) {
   return requestJson<{ prompt_type: "story"; data: StoryGenerationResult }>(
     apiBaseUrl,
@@ -87,8 +78,6 @@ export function generateStory(
       body: JSON.stringify({
         project_context: projectContext,
         brief,
-        gcp_project_id: gcpProjectId,
-        gcp_location: gcpLocation,
       }),
     },
   );
@@ -98,8 +87,6 @@ export function generateTask(
   apiBaseUrl: string,
   projectContext: string,
   brief: string,
-  gcpProjectId: string,
-  gcpLocation: string,
 ) {
   return requestJson<{ prompt_type: "task"; data: TaskGenerationResult }>(
     apiBaseUrl,
@@ -109,11 +96,23 @@ export function generateTask(
       body: JSON.stringify({
         project_context: projectContext,
         brief,
-        gcp_project_id: gcpProjectId,
-        gcp_location: gcpLocation,
       }),
     },
   );
+}
+
+export function previewEpic(
+  apiBaseUrl: string,
+  jira: JiraIssueSettings,
+  epic: EpicIssue,
+): Promise<IssueFieldsPreviewResponse> {
+  return requestJson(apiBaseUrl, "/preview/epic", {
+    method: "POST",
+    body: JSON.stringify({
+      jira,
+      epic,
+    }),
+  });
 }
 
 export function previewStory(
@@ -146,6 +145,20 @@ export function previewTask(
       task,
       issue_type: issueType,
       parent_key: parentKey || null,
+    }),
+  });
+}
+
+export function createEpic(
+  apiBaseUrl: string,
+  jira: JiraCreateSettings,
+  epic: EpicIssue,
+): Promise<CreateIssuesResponse> {
+  return requestJson(apiBaseUrl, "/create/epic", {
+    method: "POST",
+    body: JSON.stringify({
+      jira,
+      epic,
     }),
   });
 }

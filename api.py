@@ -14,6 +14,7 @@ from core.config import (
     GEMINI_MODEL,
     get_cors_origins,
     get_jira_credentials,
+    get_jira_servers,
 )
 from core.gemini import (
     create_gemini_client,
@@ -25,8 +26,10 @@ from core.jira_client import create_jira_client, resolve_assignee_account_id
 from core.service import (
     CreatedIssue,
     JiraIssueContext,
+    create_epic,
     create_story_with_tasks,
     create_task_with_subtasks,
+    preview_epic_issue_fields,
     preview_story_issue_fields,
     preview_task_issue_fields,
 )
@@ -52,7 +55,7 @@ class GeminiSettings(BaseModel):
     gcp_location: str = Field(default=DEFAULT_GCP_LOCATION)
 
 
-class GenerateRequest(GeminiSettings):
+class GenerateRequest(BaseModel):
     project_context: str = ""
     brief: str
 
@@ -68,10 +71,9 @@ class GeminiTestResponse(BaseModel):
 
 
 class ConfigDefaultsResponse(BaseModel):
-    gcp_project_id: str
-    gcp_location: str
     gemini_model: str
     jira_server: str
+    jira_servers: list[str]
     jira_project_key: str
     jira_component: str
     jira_assignee: str
@@ -114,10 +116,25 @@ class IssueFieldsPreviewResponse(BaseModel):
     fields: list[dict]
 
 
+class EpicIssue(BaseModel):
+    title: str
+    description: str
+
+
+class EpicPreviewRequest(BaseModel):
+    jira: JiraIssueSettings
+    epic: EpicIssue
+
+
 class StoryCreateRequest(BaseModel):
     jira: JiraCreateSettings
     story: StoryGenerationResult
     epic_key: str | None = None
+
+
+class EpicCreateRequest(BaseModel):
+    jira: JiraCreateSettings
+    epic: EpicIssue
 
 
 class TaskCreateRequest(BaseModel):
@@ -144,10 +161,9 @@ def health_check() -> dict[str, str]:
 @app.get("/config/defaults")
 def config_defaults() -> ConfigDefaultsResponse:
     return ConfigDefaultsResponse(
-        gcp_project_id=DEFAULT_GCP_PROJECT_ID,
-        gcp_location=DEFAULT_GCP_LOCATION,
         gemini_model=GEMINI_MODEL,
         jira_server=DEFAULT_JIRA_SERVER,
+        jira_servers=get_jira_servers(),
         jira_project_key=DEFAULT_JIRA_PROJECT,
         jira_component=DEFAULT_JIRA_COMPONENT,
         jira_assignee=DEFAULT_JIRA_ASSIGNEE,
@@ -158,7 +174,8 @@ def config_defaults() -> ConfigDefaultsResponse:
     "/test-gemini",
     responses={502: {"description": "Gemini connectivity test failed"}},
 )
-def test_gemini(settings: GeminiSettings) -> GeminiTestResponse:
+def test_gemini(settings: GeminiSettings | None = None) -> GeminiTestResponse:
+    settings = settings or GeminiSettings()
     try:
         elapsed, response_text = test_gemini_connection(
             settings.gcp_project_id,
@@ -175,8 +192,8 @@ def test_gemini(settings: GeminiSettings) -> GeminiTestResponse:
 def generate_content(prompt_type: Literal["story", "task"], request: GenerateRequest) -> GenerateResponse:
     try:
         client = create_gemini_client(
-            request.gcp_project_id,
-            request.gcp_location,
+            DEFAULT_GCP_PROJECT_ID,
+            DEFAULT_GCP_LOCATION,
         )
         data = generate_ai_content(
             client=client,
@@ -279,6 +296,21 @@ def preview_story(request: StoryPreviewRequest) -> IssueFieldsPreviewResponse:
     return IssueFieldsPreviewResponse(fields=fields)
 
 
+@app.post("/preview/epic")
+def preview_epic(request: EpicPreviewRequest) -> IssueFieldsPreviewResponse:
+    context = JiraIssueContext(
+        project_key=request.jira.project_key,
+        component_name=request.jira.component_name,
+        assignee_account_id=request.jira.assignee_account_id,
+    )
+    fields = preview_epic_issue_fields(
+        context=context,
+        title=request.epic.title,
+        description=request.epic.description,
+    )
+    return IssueFieldsPreviewResponse(fields=fields)
+
+
 @app.post("/preview/task")
 def preview_task(request: TaskPreviewRequest) -> IssueFieldsPreviewResponse:
     context = JiraIssueContext(
@@ -293,6 +325,29 @@ def preview_task(request: TaskPreviewRequest) -> IssueFieldsPreviewResponse:
         parent=request.parent_key,
     )
     return IssueFieldsPreviewResponse(fields=fields)
+
+
+@app.post(
+    "/create/epic",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira Epic creation failed"},
+    },
+)
+def create_epic_endpoint(request: EpicCreateRequest) -> CreateIssuesResponse:
+    try:
+        jira_client = get_authenticated_jira_client(request.jira)
+        created = create_epic(
+            jira_client=jira_client,
+            context=build_issue_context(request.jira),
+            title=request.epic.title,
+            description=request.epic.description,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return to_create_response(created)
 
 
 @app.post(

@@ -2,8 +2,6 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
-  readonly VITE_GCP_PROJECT_ID?: string;
-  readonly VITE_GCP_LOCATION?: string;
   readonly VITE_JIRA_SERVER?: string;
   readonly VITE_JIRA_PROJECT_KEY?: string;
   readonly VITE_JIRA_COMPONENT?: string;

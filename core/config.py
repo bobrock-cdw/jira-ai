@@ -16,6 +16,9 @@ if load_dotenv:
 DEFAULT_GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "cdw-gemini-cli-sbx")
 DEFAULT_GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
 DEFAULT_JIRA_SERVER = os.getenv("JIRA_SERVER", "https://projectultron.atlassian.net")
+DEFAULT_JIRA_SERVERS = (
+    DEFAULT_JIRA_SERVER,
+)
 DEFAULT_JIRA_PROJECT = os.getenv("JIRA_PROJECT_KEY", os.getenv("JIRA_PROJECT", "MC"))
 DEFAULT_JIRA_COMPONENT = os.getenv("JIRA_COMPONENT", "Cloud")
 DEFAULT_JIRA_ASSIGNEE = os.getenv("JIRA_ASSIGNEE", "Bob Rock")
@@ -62,6 +65,17 @@ def get_cors_origins() -> list[str]:
         origin.strip()
         for origin in raw_origins.split(",")
         if origin.strip()
+    ]
+
+
+def get_jira_servers() -> list[str]:
+    raw_servers = os.getenv("JIRA_SERVERS")
+    if not raw_servers:
+        return list(DEFAULT_JIRA_SERVERS)
+    return [
+        server.strip()
+        for server in raw_servers.split(",")
+        if server.strip()
     ]
 
 
