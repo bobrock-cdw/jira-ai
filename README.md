@@ -97,6 +97,16 @@ Then it authenticates to Jira, resolves the assignee account ID, and shows the m
 1. Epic | 2. Story | 3. Task/SubTask | 4. Exit
 ```
 
+## Testing
+
+Run the lightweight automated test suite:
+
+```sh
+python3 -m unittest discover
+```
+
+Core tests use only the standard library test runner. API tests require the optional FastAPI dependencies from `requirements-api.txt`; they mock Jira creation helpers and do not create live Jira issues.
+
 ## Input Options
 
 When the script asks for a brief or description, it offers three input methods:
