@@ -3,6 +3,7 @@ from typing import Any
 
 from jira import JIRA
 
+from core.formatter import format_story_description
 from core.jira_client import build_issue_fields, create_issue
 
 
@@ -17,11 +18,6 @@ class JiraIssueContext:
 class CreatedIssue:
     issue_type: str
     key: str
-
-
-def format_story_description(story_data: dict[str, Any]) -> str:
-    acceptance_criteria = "\n- ".join(story_data["acceptance_criteria"])
-    return f"{story_data['user_story']}\n\nAcceptance Criteria:\n- {acceptance_criteria}"
 
 
 def create_issue_from_context(
