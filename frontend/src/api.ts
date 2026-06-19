@@ -6,8 +6,11 @@ import type {
   CreateIssuesResponse,
   IssueFieldsPreviewResponse,
   IssueType,
+  JiraComponentsResponse,
   JiraCreateSettings,
   JiraIssueSettings,
+  JiraLabelsResponse,
+  JiraProjectsResponse,
   StoryGenerationResult,
   TaskGenerationResult,
 } from "./types";
@@ -62,6 +65,44 @@ export function resolveAssignee(
     body: JSON.stringify({
       jira_server: jiraServer,
       assignee_name: assigneeName,
+    }),
+  });
+}
+
+export function listJiraProjects(
+  apiBaseUrl: string,
+  jiraServer: string,
+): Promise<JiraProjectsResponse> {
+  return requestJson(apiBaseUrl, "/jira/projects", {
+    method: "POST",
+    body: JSON.stringify({
+      jira_server: jiraServer,
+    }),
+  });
+}
+
+export function listJiraComponents(
+  apiBaseUrl: string,
+  jiraServer: string,
+  projectKey: string,
+): Promise<JiraComponentsResponse> {
+  return requestJson(apiBaseUrl, "/jira/components", {
+    method: "POST",
+    body: JSON.stringify({
+      jira_server: jiraServer,
+      project_key: projectKey,
+    }),
+  });
+}
+
+export function listJiraLabels(
+  apiBaseUrl: string,
+  jiraServer: string,
+): Promise<JiraLabelsResponse> {
+  return requestJson(apiBaseUrl, "/jira/labels", {
+    method: "POST",
+    body: JSON.stringify({
+      jira_server: jiraServer,
     }),
   });
 }

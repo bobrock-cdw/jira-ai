@@ -84,6 +84,73 @@ Example response:
 }
 ```
 
+## List Jira Projects
+
+This endpoint uses server-side Jira credentials from `JIRA_USERNAME` and `JIRA_API_TOKEN`.
+
+```sh
+curl -X POST http://localhost:8000/jira/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira_server": "https://yourcompany.atlassian.net"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "projects": [
+    {"key": "MC", "name": "Marketing Cloud"},
+    {"key": "AI", "name": "AI Tools"}
+  ]
+}
+```
+
+## List Jira Components
+
+This endpoint uses server-side Jira credentials from `JIRA_USERNAME` and `JIRA_API_TOKEN`.
+
+```sh
+curl -X POST http://localhost:8000/jira/components \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira_server": "https://yourcompany.atlassian.net",
+    "project_key": "MC"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "components": [
+    {"id": "10001", "name": "Cloud"},
+    {"id": "10002", "name": "API"}
+  ]
+}
+```
+
+## List Jira Labels
+
+This endpoint uses server-side Jira credentials from `JIRA_USERNAME` and `JIRA_API_TOKEN`.
+
+```sh
+curl -X POST http://localhost:8000/jira/labels \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jira_server": "https://yourcompany.atlassian.net"
+  }'
+```
+
+Example response:
+
+```json
+{
+  "labels": ["automation", "jira-ai", "platform"]
+}
+```
+
 ## Test Gemini
 
 ```sh

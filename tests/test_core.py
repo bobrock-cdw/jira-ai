@@ -90,11 +90,23 @@ class JiraPayloadTests(unittest.TestCase):
         self.assertNotIn("components", fields)
         self.assertNotIn("parent", fields)
 
+    def test_build_issue_fields_includes_labels(self):
+        fields = build_issue_fields(
+            project_key="MC",
+            issue_type="Task",
+            summary="Title",
+            description="Description",
+            labels=["jira-ai", "automation"],
+        )
+
+        self.assertEqual(fields["labels"], ["jira-ai", "automation"])
+
     def test_preview_story_issue_fields(self):
         context = JiraIssueContext(
             project_key="MC",
             component_name="Cloud",
             assignee_account_id="abc123",
+            labels=["jira-ai"],
         )
         story_data = {
             "title": "Story title",
@@ -107,6 +119,7 @@ class JiraPayloadTests(unittest.TestCase):
 
         self.assertEqual(len(fields), 2)
         self.assertEqual(fields[0]["issuetype"]["name"], "Story")
+        self.assertEqual(fields[0]["labels"], ["jira-ai"])
         self.assertEqual(fields[0]["parent"]["key"], "MC-1")
         self.assertEqual(fields[1]["issuetype"]["name"], "Sub-task")
         self.assertEqual(fields[1]["parent"]["key"], "<created-story-key>")

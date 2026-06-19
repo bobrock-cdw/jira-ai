@@ -22,7 +22,7 @@ from core.gemini import (
     test_gemini_connection,
 )
 from core.models import StoryGenerationResult, TaskGenerationResult
-from core.jira_client import create_jira_client, resolve_assignee_account_id
+from core.jira_client import create_jira_client, list_components, list_labels, list_projects, resolve_assignee_account_id
 from core.service import (
     CreatedIssue,
     JiraIssueContext,
@@ -85,6 +85,7 @@ class JiraIssueSettings(BaseModel):
     project_key: str
     component_name: str | None = None
     assignee_account_id: str | None = None
+    labels: list[str] = Field(default_factory=list)
 
 
 class JiraCreateSettings(JiraIssueSettings):
@@ -99,6 +100,41 @@ class AssigneeResolveRequest(BaseModel):
 class AssigneeResolveResponse(BaseModel):
     assignee_name: str
     account_id: str
+
+
+class JiraProjectsRequest(BaseModel):
+    jira_server: str = DEFAULT_JIRA_SERVER
+
+
+class JiraProjectResponse(BaseModel):
+    key: str
+    name: str
+
+
+class JiraProjectsResponse(BaseModel):
+    projects: list[JiraProjectResponse]
+
+
+class JiraComponentsRequest(BaseModel):
+    jira_server: str = DEFAULT_JIRA_SERVER
+    project_key: str
+
+
+class JiraComponentResponse(BaseModel):
+    id: str
+    name: str
+
+
+class JiraComponentsResponse(BaseModel):
+    components: list[JiraComponentResponse]
+
+
+class JiraLabelsRequest(BaseModel):
+    jira_server: str = DEFAULT_JIRA_SERVER
+
+
+class JiraLabelsResponse(BaseModel):
+    labels: list[str]
 
 
 class StoryPreviewRequest(BaseModel):
@@ -252,6 +288,7 @@ def build_issue_context(settings: JiraIssueSettings) -> JiraIssueContext:
         project_key=settings.project_key,
         component_name=settings.component_name,
         assignee_account_id=settings.assignee_account_id,
+        labels=settings.labels,
     )
 
 
@@ -304,6 +341,60 @@ def resolve_assignee(request: AssigneeResolveRequest) -> AssigneeResolveResponse
         assignee_name=request.assignee_name,
         account_id=account_id,
     )
+
+
+@app.post(
+    "/jira/projects",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira project lookup failed"},
+    },
+)
+def jira_projects(request: JiraProjectsRequest) -> JiraProjectsResponse:
+    try:
+        jira_client = get_authenticated_jira_client_for_server(request.jira_server)
+        projects = list_projects(jira_client)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return JiraProjectsResponse(projects=projects)
+
+
+@app.post(
+    "/jira/components",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira component lookup failed"},
+    },
+)
+def jira_components(request: JiraComponentsRequest) -> JiraComponentsResponse:
+    try:
+        jira_client = get_authenticated_jira_client_for_server(request.jira_server)
+        components = list_components(jira_client, request.project_key)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return JiraComponentsResponse(components=components)
+
+
+@app.post(
+    "/jira/labels",
+    responses={
+        401: {"description": "Jira credentials are missing"},
+        502: {"description": "Jira label lookup failed"},
+    },
+)
+def jira_labels(request: JiraLabelsRequest) -> JiraLabelsResponse:
+    try:
+        jira_client = get_authenticated_jira_client_for_server(request.jira_server)
+        labels = list_labels(jira_client)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return JiraLabelsResponse(labels=labels)
 
 
 @app.post("/preview/story")
