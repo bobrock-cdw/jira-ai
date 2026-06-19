@@ -1,39 +1,43 @@
 import os
 import json
 import sys
-import threading
-import time
 import subprocess
 from datetime import datetime
-from jira import JIRA
-from google import genai
-from google.genai import types
+
+from core.config import (
+    DEFAULT_GCP_LOCATION,
+    DEFAULT_GCP_PROJECT_ID,
+    DEFAULT_JIRA_ASSIGNEE,
+    DEFAULT_JIRA_COMPONENT,
+    DEFAULT_JIRA_PROJECT,
+    DEFAULT_JIRA_SERVER,
+    GEMINI_MODEL,
+    LARGE_PASTE_WARNING_CHARS,
+    MAX_BRIEF_CHARS,
+    SessionConfig,
+    get_jira_credentials,
+)
+from core.gemini import (
+    create_gemini_client,
+    generate_ai_content as core_generate_ai_content,
+    test_gemini_connection,
+)
+from core.jira_client import (
+    create_jira_client,
+    get_current_user_display_name,
+    resolve_assignee_account_id,
+)
+from core.service import (
+    JiraIssueContext,
+    create_issue_from_context,
+    create_story_with_tasks,
+    create_task_with_subtasks,
+)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(line_buffering=True)
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(line_buffering=True)
-
-# ====================== HARDCODED CONFIGURATION ======================
-DEFAULT_GCP_PROJECT_ID = "cdw-gemini-cli-sbx"
-DEFAULT_GCP_LOCATION = "us-central1"
-DEFAULT_JIRA_SERVER = "https://projectultron.atlassian.net"
-DEFAULT_JIRA_PROJECT = "MC"
-DEFAULT_JIRA_COMPONENT = "Cloud"
-DEFAULT_JIRA_ASSIGNEE = "Bob Rock"
-LARGE_PASTE_WARNING_CHARS = 4096
-MAX_BRIEF_CHARS = 500_000
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_REQUEST_TIMEOUT_MS = 120_000
-GEMINI_HTTP_OPTIONS = types.HttpOptions(
-    timeout=GEMINI_REQUEST_TIMEOUT_MS,
-    # Fail fast on quota/rate limits instead of retrying silently for minutes.
-    retry_options=types.HttpRetryOptions(
-        attempts=2,
-        http_status_codes=[500, 502, 503, 504],
-    ),
-)
-# ======================================================================
 
 # Session globals set during startup()
 JIRA_SERVER = None
@@ -50,17 +54,6 @@ ASSIGNEE_ACCOUNT_ID = None
 
 def status(message):
     print(message, file=sys.stderr, flush=True)
-
-
-def format_gemini_error(exc):
-    text = str(exc)
-    if "429" in text or "RESOURCE_EXHAUSTED" in text:
-        return (
-            f"{text}\n\n"
-            "Vertex AI rate limit or quota hit. This is not a hang — the API is throttling requests.\n"
-            "Wait a minute and retry, or check quotas in GCP Console → Vertex AI → Quotas."
-        )
-    return text
 
 
 def safe_input(prompt):
@@ -95,7 +88,15 @@ def get_initial_config():
     print("\n--- Session Context ---")
     context = safe_input("Enter Project/Tech Context: ").strip()
 
-    return server, jira_project, component, assignee, gcp_project, location, context
+    return SessionConfig(
+        jira_server=server,
+        jira_project_key=jira_project,
+        jira_component_name=component,
+        jira_assignee_username=assignee,
+        gcp_project_id=gcp_project,
+        gcp_location=location,
+        project_context=context,
+    )
 
 
 def startup():
@@ -103,25 +104,23 @@ def startup():
     global GCP_PROJECT_ID, GCP_LOCATION, PROJECT_CONTEXT
     global client, jira, ASSIGNEE_ACCOUNT_ID
 
-    (
-        JIRA_SERVER, JIRA_PROJECT_KEY, JIRA_COMPONENT_NAME, JIRA_ASSIGNEE_USERNAME,
-        GCP_PROJECT_ID, GCP_LOCATION, PROJECT_CONTEXT,
-    ) = get_initial_config()
+    config = get_initial_config()
+    JIRA_SERVER = config.jira_server
+    JIRA_PROJECT_KEY = config.jira_project_key
+    JIRA_COMPONENT_NAME = config.jira_component_name
+    JIRA_ASSIGNEE_USERNAME = config.jira_assignee_username
+    GCP_PROJECT_ID = config.gcp_project_id
+    GCP_LOCATION = config.gcp_location
+    PROJECT_CONTEXT = config.project_context
 
-    jira_user = os.getenv("JIRA_USERNAME")
-    jira_token = os.getenv("JIRA_API_TOKEN")
-    if not (jira_user and jira_token):
+    jira_credentials = get_jira_credentials()
+    if not jira_credentials:
         print("❌ Error: JIRA_USERNAME or JIRA_API_TOKEN not found.")
         sys.exit(1)
 
     status(f"Initializing Gemini client ({GCP_PROJECT_ID}, {GCP_LOCATION})...")
     try:
-        client = genai.Client(
-            vertexai=True,
-            project=GCP_PROJECT_ID,
-            location=GCP_LOCATION,
-            http_options=GEMINI_HTTP_OPTIONS,
-        )
+        client = create_gemini_client(GCP_PROJECT_ID, GCP_LOCATION)
         print(f"✅ Gemini Client initialized for: {GCP_PROJECT_ID} ({GCP_LOCATION})")
     except Exception as e:
         print(f"❌ Vertex AI Initialization Failed: {e}")
@@ -129,10 +128,12 @@ def startup():
 
     status("Connecting to Jira...")
     try:
-        jira = JIRA(server=JIRA_SERVER, basic_auth=(jira_user, jira_token))
-        print(f"✅ Authenticated to Jira: {jira.myself()['displayName']}")
-        users = jira.search_users(query=JIRA_ASSIGNEE_USERNAME, maxResults=1)
-        ASSIGNEE_ACCOUNT_ID = users[0].accountId if users else None
+        jira = create_jira_client(JIRA_SERVER, jira_credentials)
+        print(f"✅ Authenticated to Jira: {get_current_user_display_name(jira)}")
+        ASSIGNEE_ACCOUNT_ID = resolve_assignee_account_id(
+            jira,
+            JIRA_ASSIGNEE_USERNAME,
+        )
     except Exception as e:
         print(f"❌ Jira Setup Failed: {e}")
         sys.exit(1)
@@ -237,27 +238,7 @@ def get_multiline_input(prompt):
     return text
 
 
-def _call_gemini(prompt):
-    return client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
-    )
-
-
 def generate_ai_content(prompt_type, brief):
-    prompts = {
-        "story": (
-            f"Act as an Expert Committee (PM, Dev, Architect, QA). Context: {PROJECT_CONTEXT}. "
-            f"Brief: {brief}. Return ONLY JSON: "
-            "{'title', 'user_story', 'acceptance_criteria', 'tasks': [{'title', 'description'}]}"
-        ),
-        "task": (
-            f"Act as a Lead Dev and Architect. Context: {PROJECT_CONTEXT}. Brief: {brief}. "
-            "Return ONLY JSON: {'title', 'description', 'subtasks': [{'title', 'description'}]}"
-        ),
-    }
-
     print(
         f"\n⏳ Generating with {GEMINI_MODEL} ({len(brief):,} char brief). "
         "Watch for progress below — usually 15–60s.",
@@ -267,60 +248,49 @@ def generate_ai_content(prompt_type, brief):
         f"Calling {GEMINI_MODEL} via Vertex AI. Progress updates every 2s..."
     )
 
-    result = {}
-    error = {}
-
-    def worker():
-        try:
-            result["response"] = _call_gemini(prompts[prompt_type])
-        except Exception as exc:
-            error["exc"] = exc
-
-    started_at = time.time()
-    worker_thread = threading.Thread(target=worker, daemon=True)
-    worker_thread.start()
-
-    while worker_thread.is_alive():
-        elapsed = int(time.time() - started_at)
-        status(f"Waiting for Gemini... {elapsed}s")
-        worker_thread.join(timeout=2)
-
-    if error:
-        print(f"\n❌ Gemini Error: {format_gemini_error(error['exc'])}")
-        return None
-
-    response = result.get("response")
-    if not response or not response.text:
-        print("\n❌ Gemini Error: empty response from model.")
-        return None
-
-    elapsed = int(time.time() - started_at)
-    status(f"Gemini responded in {elapsed}s.")
     try:
-        return json.loads(response.text)
+        data = core_generate_ai_content(
+            client=client,
+            prompt_type=prompt_type,
+            brief=brief,
+            project_context=PROJECT_CONTEXT,
+            progress_callback=status,
+        )
+        status("Gemini responded.")
+        return data
     except json.JSONDecodeError as exc:
         print(f"\n❌ Gemini Error: invalid JSON in response ({exc}).")
-        print(f"Raw response preview:\n{response.text[:500]}")
         return None
+    except Exception as exc:
+        print(f"\n❌ Gemini Error: {exc}")
+        return None
+
+
+def get_issue_context():
+    return JiraIssueContext(
+        project_key=JIRA_PROJECT_KEY,
+        component_name=JIRA_COMPONENT_NAME,
+        assignee_account_id=ASSIGNEE_ACCOUNT_ID,
+    )
+
+
+def print_created_issues(created_issues):
+    for issue in created_issues:
+        print(f"✅ Created {issue.issue_type}: {issue.key}")
 
 
 def create_issue(issue_type, summary, description, parent=None):
-    fields = {
-        "project": {"key": JIRA_PROJECT_KEY},
-        "summary": summary,
-        "description": description,
-        "issuetype": {"name": issue_type},
-        "assignee": {"accountId": ASSIGNEE_ACCOUNT_ID} if ASSIGNEE_ACCOUNT_ID else None,
-    }
-    if JIRA_COMPONENT_NAME:
-        fields["components"] = [{"name": JIRA_COMPONENT_NAME}]
-    if parent:
-        fields["parent"] = {"key": parent}
-
     try:
-        issue = jira.create_issue(fields=fields)
-        print(f"✅ Created {issue_type}: {issue.key}")
-        return issue.key
+        created = create_issue_from_context(
+            jira_client=jira,
+            context=get_issue_context(),
+            issue_type=issue_type,
+            summary=summary,
+            description=description,
+            parent=parent,
+        )
+        print_created_issues([created])
+        return created.key
     except Exception as e:
         print(f"❌ Creation Failed: {e}")
         return None
@@ -332,24 +302,85 @@ def test_gemini():
     status(f"Gemini connectivity test: project={project}, location={location}")
 
     try:
-        test_client = genai.Client(
-            vertexai=True,
-            project=project,
-            location=location,
-            http_options=GEMINI_HTTP_OPTIONS,
-        )
         status("Client created. Sending test prompt...")
-        started = time.time()
-        response = test_client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents='Return JSON: {"status":"ok"}',
-            config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2),
-        )
-        elapsed = int(time.time() - started)
-        print(f"✅ Gemini OK in {elapsed}s: {response.text}")
+        elapsed, response_text = test_gemini_connection(project, location)
+        print(f"✅ Gemini OK in {elapsed}s: {response_text}")
     except Exception as e:
-        print(f"❌ Gemini test failed: {format_gemini_error(e)}")
+        print(f"❌ Gemini test failed: {e}")
         sys.exit(1)
+
+
+def handle_epic():
+    title = safe_input("Epic Title: ")
+    desc = get_multiline_input("Epic Description")
+    create_issue("Epic", title, desc)
+
+
+def review_generated_content(prompt_type, brief):
+    data = generate_ai_content(prompt_type, brief)
+    if not data:
+        return None, None
+    log_deliberation(data)
+    print("\nPROPOSED CONTENT:\n", json.dumps(data, indent=2))
+    action = safe_input("\n[y] Create, [r] Retry, [n] Cancel: ").lower().strip()
+    return data, action
+
+
+def handle_story():
+    epic = safe_input("Epic Key (optional): ").strip() or None
+    brief = get_multiline_input("Describe the Story requirement")
+    if not brief:
+        print("⚠️ No brief provided; skipping.")
+        return
+
+    while True:
+        data, action = review_generated_content("story", brief)
+        if not data:
+            return
+        if action == "y":
+            try:
+                created = create_story_with_tasks(
+                    jira_client=jira,
+                    context=get_issue_context(),
+                    story_data=data,
+                    epic_key=epic,
+                )
+                print_created_issues(created)
+            except Exception as e:
+                print(f"❌ Creation Failed: {e}")
+            return
+        if action != "r":
+            return
+
+
+def handle_task_or_subtask():
+    requested_type = safe_input("Create Task or Sub-task? [task/subtask]: ").lower().strip()
+    parent = safe_input("Parent Key (optional for Task): ").strip() or None
+    brief = get_multiline_input(f"Describe the {requested_type}")
+    if not brief:
+        print("⚠️ No brief provided; skipping.")
+        return
+
+    issue_type = "Task" if requested_type == "task" else "Sub-task"
+    while True:
+        data, action = review_generated_content("task", brief)
+        if not data:
+            return
+        if action == "y":
+            try:
+                created = create_task_with_subtasks(
+                    jira_client=jira,
+                    context=get_issue_context(),
+                    task_data=data,
+                    issue_type=issue_type,
+                    parent=parent,
+                )
+                print_created_issues(created)
+            except Exception as e:
+                print(f"❌ Creation Failed: {e}")
+            return
+        if action != "r":
+            return
 
 
 def main():
@@ -358,60 +389,11 @@ def main():
         choice = safe_input("Choice: ")
 
         if choice == "1":
-            title = safe_input("Epic Title: ")
-            desc = get_multiline_input("Epic Description")
-            create_issue("Epic", title, desc)
-
+            handle_epic()
         elif choice == "2":
-            epic = safe_input("Epic Key (optional): ").strip() or None
-            brief = get_multiline_input("Describe the Story requirement")
-            if not brief:
-                print("⚠️ No brief provided; skipping.")
-                continue
-            while True:
-                data = generate_ai_content("story", brief)
-                if not data:
-                    break
-                log_deliberation(data)
-                print("\nPROPOSED CONTENT:\n", json.dumps(data, indent=2))
-                action = safe_input("\n[y] Create, [r] Retry, [n] Cancel: ").lower().strip()
-                if action == "y":
-                    desc = f"{data['user_story']}\n\nAcceptance Criteria:\n- " + "\n- ".join(data["acceptance_criteria"])
-                    key = create_issue("Story", data["title"], desc, epic)
-                    if key:
-                        for t in data["tasks"]:
-                            create_issue("Sub-task", t["title"], t["description"], key)
-                    break
-                if action != "r":
-                    break
-
+            handle_story()
         elif choice == "3":
-            i_type = safe_input("Create Task or Sub-task? [task/subtask]: ").lower().strip()
-            parent = safe_input("Parent Key (optional for Task): ").strip() or None
-            brief = get_multiline_input(f"Describe the {i_type}")
-            if not brief:
-                print("⚠️ No brief provided; skipping.")
-                continue
-            while True:
-                data = generate_ai_content("task", brief)
-                if not data:
-                    break
-                log_deliberation(data)
-                print("\nPROPOSED CONTENT:\n", json.dumps(data, indent=2))
-                action = safe_input("\n[y] Create, [r] Retry, [n] Cancel: ").lower().strip()
-                if action == "y":
-                    key = create_issue(
-                        "Task" if i_type == "task" else "Sub-task",
-                        data["title"],
-                        data["description"],
-                        parent,
-                    )
-                    if key and i_type == "task" and "subtasks" in data:
-                        for s in data["subtasks"]:
-                            create_issue("Sub-task", s["title"], s["description"], key)
-                    break
-                if action != "r":
-                    break
+            handle_task_or_subtask()
         elif choice == "4":
             break
 
