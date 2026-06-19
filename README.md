@@ -244,6 +244,9 @@ Initial endpoints:
 - `GET /health`
 - `GET /config/defaults`
 - `POST /test-gemini`
+- `POST /jira/projects`
+- `POST /jira/components`
+- `POST /jira/labels`
 - `POST /jira/resolve-assignee`
 - `POST /generate/epic`
 - `POST /generate/story`

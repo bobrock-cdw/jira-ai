@@ -5,6 +5,7 @@ export interface JiraIssueSettings {
   project_key: string;
   component_name?: string;
   assignee_account_id?: string;
+  labels?: string[];
 }
 
 export interface JiraCreateSettings extends JiraIssueSettings {
@@ -55,6 +56,28 @@ export interface CreatedIssue {
 
 export interface CreateIssuesResponse {
   created: CreatedIssue[];
+}
+
+export interface JiraProject {
+  key: string;
+  name: string;
+}
+
+export interface JiraProjectsResponse {
+  projects: JiraProject[];
+}
+
+export interface JiraComponent {
+  id: string;
+  name: string;
+}
+
+export interface JiraComponentsResponse {
+  components: JiraComponent[];
+}
+
+export interface JiraLabelsResponse {
+  labels: string[];
 }
 
 export interface ConfigDefaultsResponse {

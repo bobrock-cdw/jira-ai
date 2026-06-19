@@ -21,6 +21,37 @@ def resolve_assignee_account_id(jira_client: JIRA, assignee_name: str) -> str | 
     return users[0].accountId if users else None
 
 
+def list_projects(jira_client: JIRA) -> list[dict[str, str]]:
+    return [
+        {
+            "key": project.key,
+            "name": project.name,
+        }
+        for project in jira_client.projects()
+    ]
+
+
+def list_components(jira_client: JIRA, project_key: str) -> list[dict[str, str]]:
+    return [
+        {
+            "id": str(component.id),
+            "name": component.name,
+        }
+        for component in jira_client.project_components(project_key)
+    ]
+
+
+def list_labels(jira_client: JIRA) -> list[str]:
+    if hasattr(jira_client, "labels"):
+        return sorted(str(label) for label in jira_client.labels())
+
+    response = jira_client._session.get(f"{jira_client._options['server']}/rest/api/3/label")
+    response.raise_for_status()
+    data = response.json()
+    values = data.get("values", [])
+    return sorted(str(label) for label in values)
+
+
 def build_issue_fields(
     project_key: str,
     issue_type: str,
@@ -28,6 +59,7 @@ def build_issue_fields(
     description: str,
     component_name: str | None = None,
     assignee_account_id: str | None = None,
+    labels: list[str] | None = None,
     parent: str | None = None,
 ) -> dict[str, Any]:
     fields: dict[str, Any] = {
@@ -40,6 +72,8 @@ def build_issue_fields(
         fields["assignee"] = {"accountId": assignee_account_id}
     if component_name:
         fields["components"] = [{"name": component_name}]
+    if labels:
+        fields["labels"] = labels
     if parent:
         fields["parent"] = {"key": parent}
     return fields

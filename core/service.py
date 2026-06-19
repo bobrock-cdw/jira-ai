@@ -12,6 +12,7 @@ class JiraIssueContext:
     project_key: str
     component_name: str | None = None
     assignee_account_id: str | None = None
+    labels: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ def build_issue_fields_from_context(
         description=description,
         component_name=context.component_name,
         assignee_account_id=context.assignee_account_id,
+        labels=context.labels,
         parent=parent,
     )
 

@@ -10,6 +10,9 @@ import {
   generateTask,
   getConfigDefaults,
   health,
+  listJiraComponents,
+  listJiraLabels,
+  listJiraProjects,
   previewEpic,
   previewEpicPlan,
   previewStory,
@@ -25,8 +28,10 @@ import type {
   GeneratedTask,
   IssueFieldsPreviewResponse,
   IssueType,
+  JiraComponent,
   JiraCreateSettings,
   JiraIssueSettings,
+  JiraProject,
   StoryGenerationResult,
   TaskGenerationResult,
 } from "./types";
@@ -50,6 +55,24 @@ function canPreview(
   return Boolean(task);
 }
 
+function parseLabels(labelsInput: string): string[] {
+  return labelsInput
+    .split(",")
+    .map((label) => label.trim())
+    .filter(Boolean);
+}
+
+function getActiveLabelFragment(labelsInput: string): string {
+  const parts = labelsInput.split(",");
+  return parts[parts.length - 1].trim();
+}
+
+function applyLabelSuggestion(labelsInput: string, suggestion: string): string {
+  const parts = labelsInput.split(",");
+  parts[parts.length - 1] = ` ${suggestion}`;
+  return `${parts.map((part) => part.trim()).filter(Boolean).join(", ")}, `;
+}
+
 function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_API_BASE_URL);
   const [jiraServer, setJiraServer] = useState(DEFAULT_JIRA_SERVER);
@@ -57,7 +80,11 @@ function App() {
     DEFAULT_JIRA_SERVER ? [DEFAULT_JIRA_SERVER] : [],
   );
   const [projectKey, setProjectKey] = useState(DEFAULT_JIRA_PROJECT_KEY);
+  const [jiraProjects, setJiraProjects] = useState<JiraProject[]>([]);
   const [componentName, setComponentName] = useState(DEFAULT_JIRA_COMPONENT);
+  const [jiraComponents, setJiraComponents] = useState<JiraComponent[]>([]);
+  const [labelsInput, setLabelsInput] = useState("");
+  const [jiraLabels, setJiraLabels] = useState<string[]>([]);
   const [assigneeName, setAssigneeName] = useState(DEFAULT_JIRA_ASSIGNEE);
   const [assigneeAccountId, setAssigneeAccountId] = useState("");
   const [projectContext, setProjectContext] = useState("");
@@ -73,11 +100,14 @@ function App() {
   const [created, setCreated] = useState<CreateIssuesResponse | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const jiraSettings: JiraIssueSettings = {
     project_key: projectKey,
     component_name: componentName || undefined,
     assignee_account_id: assigneeAccountId || undefined,
+    labels: parseLabels(labelsInput),
   };
 
   const jiraCreateSettings: JiraCreateSettings = {
@@ -85,22 +115,69 @@ function App() {
     jira_server: jiraServer,
   };
 
+  const selectedLabels = parseLabels(labelsInput);
+  const activeLabelFragment = getActiveLabelFragment(labelsInput);
+  const labelSuggestions = activeLabelFragment
+    ? jiraLabels
+        .filter((label) => !selectedLabels.includes(label))
+        .filter((label) => label.toLowerCase().includes(activeLabelFragment.toLowerCase()))
+        .sort((first, second) => {
+          const fragment = activeLabelFragment.toLowerCase();
+          const firstStartsWith = first.toLowerCase().startsWith(fragment);
+          const secondStartsWith = second.toLowerCase().startsWith(fragment);
+          if (firstStartsWith === secondStartsWith) return first.localeCompare(second);
+          return firstStartsWith ? -1 : 1;
+        })
+        .slice(0, 8)
+    : [];
+
   useEffect(() => {
     getConfigDefaults(DEFAULT_API_BASE_URL)
-      .then((defaults) => {
+      .then(async (defaults) => {
         setJiraServer(defaults.jira_server);
         setJiraServers(defaults.jira_servers);
         setProjectKey(defaults.jira_project_key);
         setComponentName(defaults.jira_component);
         setAssigneeName(defaults.jira_assignee);
+        const loadErrors = [];
+        try {
+          await loadProjectsForServer(
+            DEFAULT_API_BASE_URL,
+            defaults.jira_server,
+            defaults.jira_project_key,
+            false,
+          );
+        } catch (error) {
+          loadErrors.push(`projects: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        try {
+          await loadLabelsForServer(DEFAULT_API_BASE_URL, defaults.jira_server, false);
+        } catch (error) {
+          loadErrors.push(`labels: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (loadErrors.length > 0) {
+          setMessage(`Loaded defaults, but could not load ${loadErrors.join("; ")}`);
+        }
       })
       .catch((error) => {
         setMessage(`Could not load backend defaults: ${error instanceof Error ? error.message : String(error)}`);
       });
   }, []);
 
-  async function runAction(action: () => Promise<void>) {
+  useEffect(() => {
+    if (!loading) return;
+
+    setElapsedSeconds(0);
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
+  async function runAction(action: () => Promise<void>, actionMessage = "Working...") {
     setLoading(true);
+    setLoadingMessage(actionMessage);
     setMessage("");
     try {
       await action();
@@ -108,6 +185,7 @@ function App() {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
+      setLoadingMessage("");
     }
   }
 
@@ -115,7 +193,7 @@ function App() {
     await runAction(async () => {
       const result = await health(apiBaseUrl);
       setMessage(`Backend status: ${result.status}`);
-    });
+    }, "Checking backend status...");
   }
 
   async function loadDefaults(showSuccessMessage = true) {
@@ -125,15 +203,35 @@ function App() {
     setProjectKey(defaults.jira_project_key);
     setComponentName(defaults.jira_component);
     setAssigneeName(defaults.jira_assignee);
+    const loadErrors = [];
+    try {
+      await loadProjectsForServer(
+        apiBaseUrl,
+        defaults.jira_server,
+        defaults.jira_project_key,
+        false,
+      );
+    } catch (error) {
+      loadErrors.push(`projects: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    try {
+      await loadLabelsForServer(apiBaseUrl, defaults.jira_server, false);
+    } catch (error) {
+      loadErrors.push(`labels: ${error instanceof Error ? error.message : String(error)}`);
+    }
     if (showSuccessMessage) {
-      setMessage("Loaded backend defaults.");
+      setMessage(
+        loadErrors.length > 0
+          ? `Loaded defaults, but could not load ${loadErrors.join("; ")}`
+          : "Loaded backend defaults.",
+      );
     }
   }
 
   async function handleLoadDefaults() {
     await runAction(async () => {
       await loadDefaults();
-    });
+    }, "Loading backend defaults...");
   }
 
   async function handleResolveAssignee() {
@@ -141,14 +239,112 @@ function App() {
       const result = await resolveAssignee(apiBaseUrl, jiraServer, assigneeName);
       setAssigneeAccountId(result.account_id);
       setMessage(`Resolved ${result.assignee_name} to ${result.account_id}.`);
-    });
+    }, "Resolving Jira assignee...");
+  }
+
+  async function loadLabelsForServer(
+    targetApiBaseUrl: string,
+    targetJiraServer: string,
+    showSuccessMessage = true,
+  ) {
+    const result = await listJiraLabels(targetApiBaseUrl, targetJiraServer);
+    setJiraLabels(result.labels);
+
+    if (showSuccessMessage) {
+      setMessage(`Loaded ${result.labels.length} Jira labels.`);
+    }
+  }
+
+  async function loadProjectsForServer(
+    targetApiBaseUrl: string,
+    targetJiraServer: string,
+    selectedProjectKey: string,
+    showSuccessMessage = true,
+  ) {
+    const result = await listJiraProjects(targetApiBaseUrl, targetJiraServer);
+    setJiraProjects(result.projects);
+
+    const selectedProjectExists = result.projects.some(
+      (project) => project.key === selectedProjectKey,
+    );
+    if ((!selectedProjectKey || !selectedProjectExists) && result.projects.length > 0) {
+      setProjectKey(result.projects[0].key);
+      await loadComponentsForProject(
+        targetApiBaseUrl,
+        targetJiraServer,
+        result.projects[0].key,
+        componentName,
+        false,
+      );
+      return;
+    }
+
+    if (selectedProjectKey) {
+      await loadComponentsForProject(
+        targetApiBaseUrl,
+        targetJiraServer,
+        selectedProjectKey,
+        componentName,
+        false,
+      );
+    }
+
+    if (showSuccessMessage) {
+      setMessage(`Loaded ${result.projects.length} Jira projects.`);
+    }
+  }
+
+  async function loadComponentsForProject(
+    targetApiBaseUrl: string,
+    targetJiraServer: string,
+    selectedProjectKey: string,
+    selectedComponentName: string,
+    showSuccessMessage = true,
+  ) {
+    const result = await listJiraComponents(
+      targetApiBaseUrl,
+      targetJiraServer,
+      selectedProjectKey,
+    );
+    setJiraComponents(result.components);
+
+    const selectedComponentExists = result.components.some(
+      (component) => component.name === selectedComponentName,
+    );
+    if (selectedComponentName && !selectedComponentExists) {
+      setComponentName("");
+    }
+
+    if (showSuccessMessage) {
+      setMessage(`Loaded ${result.components.length} Jira components.`);
+    }
+  }
+
+  async function handleLoadProjects() {
+    await runAction(async () => {
+      await loadProjectsForServer(apiBaseUrl, jiraServer, projectKey);
+    }, "Loading Jira projects...");
+  }
+
+  async function handleProjectKeyChange(nextProjectKey: string) {
+    setProjectKey(nextProjectKey);
+    setComponentName("");
+    setJiraComponents([]);
+    await runAction(async () => {
+      await loadComponentsForProject(
+        apiBaseUrl,
+        jiraServer,
+        nextProjectKey,
+        "",
+      );
+    }, "Loading Jira components...");
   }
 
   async function handleTestGemini() {
     await runAction(async () => {
       const result = await testGemini(apiBaseUrl);
       setMessage(`Gemini OK in ${result.elapsed_seconds}s: ${result.response_text}`);
-    });
+    }, "Testing Gemini connection...");
   }
 
   function handleWorkflowChange(nextWorkflow: Workflow) {
@@ -195,7 +391,7 @@ function App() {
         setTask(result.data);
         setStory(null);
       }
-    });
+    }, "Gemini is generating your Jira work items...");
   }
 
   async function handlePreview() {
@@ -211,7 +407,7 @@ function App() {
       if (workflow === "task" && task) {
         setPreview(await previewTask(apiBaseUrl, jiraSettings, task, issueType, parentKey));
       }
-    });
+    }, "Building Jira preview payload...");
   }
 
   async function handleCreate() {
@@ -231,7 +427,7 @@ function App() {
       if (workflow === "task" && task) {
         setCreated(await createTask(apiBaseUrl, jiraCreateSettings, task, issueType, parentKey));
       }
-    });
+    }, "Creating approved issues in Jira...");
   }
 
   return (
@@ -274,11 +470,61 @@ function App() {
           </label>
           <label>
             Jira Project Key
-            <input value={projectKey} onChange={(e) => setProjectKey(e.target.value)} />
+            {jiraProjects.length > 0 ? (
+              <select value={projectKey} onChange={(e) => void handleProjectKeyChange(e.target.value)}>
+                {jiraProjects.map((project) => (
+                  <option key={project.key} value={project.key}>
+                    {project.key} - {project.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input value={projectKey} onChange={(e) => setProjectKey(e.target.value)} />
+            )}
           </label>
           <label>
             Component
-            <input value={componentName} onChange={(e) => setComponentName(e.target.value)} />
+            {jiraComponents.length > 0 ? (
+              <select value={componentName} onChange={(e) => setComponentName(e.target.value)}>
+                <option value="">No component</option>
+                {jiraComponents.map((component) => (
+                  <option key={component.id} value={component.name}>
+                    {component.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input value={componentName} onChange={(e) => setComponentName(e.target.value)} />
+            )}
+          </label>
+          <label>
+            Labels
+            <input
+              placeholder="jira-ai, automation"
+              value={labelsInput}
+              onChange={(e) => setLabelsInput(e.target.value)}
+            />
+            <span className="field-help">
+              {jiraLabels.length > 0
+                ? `${jiraLabels.length} existing Jira labels loaded. Type to search, then click a suggestion.`
+                : "No Jira labels loaded yet. Labels load automatically after backend defaults are loaded."}
+            </span>
+            {labelSuggestions.length > 0 && (
+              <div className="label-suggestions">
+                {labelSuggestions.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setLabelsInput(applyLabelSuggestion(labelsInput, label))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {activeLabelFragment && jiraLabels.length > 0 && labelSuggestions.length === 0 && (
+              <span className="field-help">No existing labels match “{activeLabelFragment}”.</span>
+            )}
           </label>
           <label>
             Assignee Name
@@ -290,6 +536,9 @@ function App() {
           </label>
           <div className="button-row">
             <button onClick={handleLoadDefaults} disabled={loading}>Load Backend Defaults</button>
+            <button onClick={handleLoadProjects} disabled={loading || !jiraServer}>
+              Load Projects
+            </button>
             <button onClick={handleResolveAssignee} disabled={loading || !jiraServer || !assigneeName}>
               Resolve Assignee
             </button>
@@ -377,7 +626,7 @@ function App() {
         )}
         <div className="button-row">
           <button onClick={handlePreview} disabled={loading || !canPreview(workflow, epic, epicPlan, story, task)}>
-            Preview Jira Payload
+            Preview
           </button>
           <button onClick={handleCreate} disabled={loading || !preview}>
             Create in Jira
@@ -386,7 +635,14 @@ function App() {
       </section>
 
       {message && <pre className="message">{message}</pre>}
-      {preview && <JsonPanel title="Preview Payloads" value={preview} />}
+      {loading && <ProgressPanel message={loadingMessage} elapsedSeconds={elapsedSeconds} />}
+      {preview && (
+        <PreviewSummary
+          preview={preview}
+          loading={loading}
+          onCreate={handleCreate}
+        />
+      )}
       {created && <CreatedIssuesSummary created={created.created} />}
     </main>
   );
@@ -602,6 +858,101 @@ function JsonPanel({ title, value }: { title: string; value: unknown }) {
     <section className="card">
       <h2>{title}</h2>
       <pre>{JSON.stringify(value, null, 2)}</pre>
+    </section>
+  );
+}
+
+function ProgressPanel({
+  message,
+  elapsedSeconds,
+}: {
+  message: string;
+  elapsedSeconds: number;
+}) {
+  return (
+    <section className="card progress-card" aria-live="polite">
+      <div className="progress-header">
+        <h2>{message || "Working..."}</h2>
+        <span>{elapsedSeconds}s elapsed</span>
+      </div>
+      <div className="progress-track" aria-label="Progress">
+        <div className="progress-bar" />
+      </div>
+      <p>Some actions can take 10-60 seconds. Please keep this page open.</p>
+    </section>
+  );
+}
+
+function getPreviewText(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && "content" in value) {
+    const content = (value as { content?: unknown }).content;
+    if (Array.isArray(content)) {
+      return content
+        .map((item) => getPreviewText(item))
+        .filter(Boolean)
+        .join("\n");
+    }
+  }
+  return String(value);
+}
+
+function getPreviewParent(fields: Record<string, unknown>): string {
+  const parent = fields.parent;
+  if (parent && typeof parent === "object" && "key" in parent) {
+    return String((parent as { key?: unknown }).key || "");
+  }
+  return "";
+}
+
+function PreviewSummary({
+  preview,
+  loading,
+  onCreate,
+}: {
+  preview: IssueFieldsPreviewResponse;
+  loading: boolean;
+  onCreate: () => void;
+}) {
+  return (
+    <section className="card">
+      <h2>Preview</h2>
+      <p>Review these Jira work items before creating anything.</p>
+      <div className="preview-summary">
+        {preview.fields.map((fields, index) => {
+          const issueType = String((fields.issuetype as { name?: unknown } | undefined)?.name || "Issue");
+          const summary = String(fields.summary || "Untitled");
+          const description = getPreviewText(fields.description);
+          const parent = getPreviewParent(fields);
+          const labels = Array.isArray(fields.labels) ? fields.labels.map(String) : [];
+          const boxClass = issueType === "Epic"
+            ? "epic-box"
+            : issueType === "Story"
+              ? "story-box"
+              : "task-box";
+
+          return (
+            <section className={`review-box ${boxClass}`} key={`${issueType}-${summary}-${index}`}>
+              <h3>{issueType}</h3>
+              <p><strong>Summary:</strong> {summary}</p>
+              {parent && <p><strong>Parent:</strong> {parent}</p>}
+              {labels.length > 0 && <p><strong>Labels:</strong> {labels.join(", ")}</p>}
+              {description && (
+                <div>
+                  <strong>Description:</strong>
+                  <p className="preview-description">{description}</p>
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+      <div className="button-row preview-actions">
+        <button onClick={onCreate} disabled={loading}>
+          Create in Jira
+        </button>
+      </div>
     </section>
   );
 }

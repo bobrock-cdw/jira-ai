@@ -125,6 +125,109 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(fields[0]["issuetype"]["name"], "Epic")
         self.assertEqual(fields[1]["parent"]["key"], "<created-epic-key>")
 
+    def test_jira_projects_endpoint_uses_mocked_lookup(self):
+        from core.config import JiraCredentials
+
+        original_get_credentials = self.api.get_jira_credentials
+        original_create_client = self.api.create_jira_client
+        original_list_projects = self.api.list_projects
+        self.addCleanup(setattr, self.api, "get_jira_credentials", original_get_credentials)
+        self.addCleanup(setattr, self.api, "create_jira_client", original_create_client)
+        self.addCleanup(setattr, self.api, "list_projects", original_list_projects)
+
+        jira_client = object()
+        self.api.get_jira_credentials = lambda: JiraCredentials(
+            username="user",
+            token="token",
+        )
+        self.api.create_jira_client = lambda server, credentials: jira_client
+        self.api.list_projects = lambda client: [
+            {"key": "MC", "name": "Marketing Cloud"},
+            {"key": "AI", "name": "AI Tools"},
+        ] if client is jira_client else []
+
+        response = self.client.post(
+            "/jira/projects",
+            json={"jira_server": "https://example.atlassian.net"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "projects": [
+                    {"key": "MC", "name": "Marketing Cloud"},
+                    {"key": "AI", "name": "AI Tools"},
+                ]
+            },
+        )
+
+    def test_jira_components_endpoint_uses_mocked_lookup(self):
+        from core.config import JiraCredentials
+
+        original_get_credentials = self.api.get_jira_credentials
+        original_create_client = self.api.create_jira_client
+        original_list_components = self.api.list_components
+        self.addCleanup(setattr, self.api, "get_jira_credentials", original_get_credentials)
+        self.addCleanup(setattr, self.api, "create_jira_client", original_create_client)
+        self.addCleanup(setattr, self.api, "list_components", original_list_components)
+
+        jira_client = object()
+        self.api.get_jira_credentials = lambda: JiraCredentials(
+            username="user",
+            token="token",
+        )
+        self.api.create_jira_client = lambda server, credentials: jira_client
+        self.api.list_components = lambda client, project_key: [
+            {"id": "10001", "name": "Cloud"},
+            {"id": "10002", "name": "API"},
+        ] if client is jira_client and project_key == "MC" else []
+
+        response = self.client.post(
+            "/jira/components",
+            json={
+                "jira_server": "https://example.atlassian.net",
+                "project_key": "MC",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "components": [
+                    {"id": "10001", "name": "Cloud"},
+                    {"id": "10002", "name": "API"},
+                ]
+            },
+        )
+
+    def test_jira_labels_endpoint_uses_mocked_lookup(self):
+        from core.config import JiraCredentials
+
+        original_get_credentials = self.api.get_jira_credentials
+        original_create_client = self.api.create_jira_client
+        original_list_labels = self.api.list_labels
+        self.addCleanup(setattr, self.api, "get_jira_credentials", original_get_credentials)
+        self.addCleanup(setattr, self.api, "create_jira_client", original_create_client)
+        self.addCleanup(setattr, self.api, "list_labels", original_list_labels)
+
+        jira_client = object()
+        self.api.get_jira_credentials = lambda: JiraCredentials(
+            username="user",
+            token="token",
+        )
+        self.api.create_jira_client = lambda server, credentials: jira_client
+        self.api.list_labels = lambda client: ["automation", "jira-ai"] if client is jira_client else []
+
+        response = self.client.post(
+            "/jira/labels",
+            json={"jira_server": "https://example.atlassian.net"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"labels": ["automation", "jira-ai"]})
+
     def test_create_task_endpoint_uses_mocked_jira_creation(self):
         from core.config import JiraCredentials
         from core.service import CreatedIssue
